@@ -1,0 +1,300 @@
+/**
+ * Budget-App – Datenschicht.
+ * Liest und schreibt das Google Sheet direkt über die Sheets-API (Login mit Google).
+ * Offline: letzte Daten aus dem Gerätespeicher, Änderungen kommen in eine Warteschlange.
+ * Gleiche Funktionen wie früher Code.gs: getData, search, addBuchung, updateBuchung, deleteBuchung, importCsv.
+ */
+const Daten = (() => {
+  const SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
+  const API = 'https://sheets.googleapis.com/v4/spreadsheets/';
+  const K = { cfg: 'budget.cfg', cache: 'budget.cache', queue: 'budget.queue', token: 'budget.token' };
+  const NCOLS = 13;
+
+  const speicher = {
+    get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+    del(k) { try { localStorage.removeItem(k); } catch (e) {} }
+  };
+
+  let cfg = speicher.get(K.cfg) || {};          // { clientId, sheetId }
+  let D = speicher.get(K.cache);                // { buchungen, kategorien, regelnRows, einst, stand }
+  let queue = speicher.get(K.queue) || [];
+  let sheetIds = null;                          // Blattname → sheetId
+  let tokenClient = null, tokenWaiters = [];
+  let tok = speicher.get(K.token);              // { access, exp }
+  const listeners = new Set();
+  const melde = () => listeners.forEach(f => { try { f(status()); } catch (e) {} });
+
+  /* ---------------- Konfiguration & Status ---------------- */
+  const konfiguriert = () => !!(cfg.clientId && cfg.sheetId);
+  function konfigurieren(clientId, sheetId) {
+    cfg = { clientId: clientId.trim(), sheetId: extrahiereId(sheetId) };
+    speicher.set(K.cfg, cfg); sheetIds = null; tokenClient = null;
+  }
+  function extrahiereId(s) { const m = String(s).match(/\/d\/([a-zA-Z0-9_-]{20,})/); return (m ? m[1] : String(s)).trim(); }
+  const angemeldet = () => !!(tok && tok.exp > Date.now() + 60000);
+  const status = () => ({ online: navigator.onLine, angemeldet: angemeldet(), warteschlange: queue.length, stand: D && D.stand });
+  function abmelden() {
+    if (tok && window.google && google.accounts) try { google.accounts.oauth2.revoke(tok.access, () => {}); } catch (e) {}
+    tok = null; speicher.del(K.token); melde();
+  }
+
+  /* ---------------- Login (Google Identity Services) ---------------- */
+  function gisBereit() {
+    return new Promise((res, rej) => {
+      const t0 = Date.now();
+      (function warte() {
+        if (window.google && google.accounts && google.accounts.oauth2) return res();
+        if (Date.now() - t0 > 10000) return rej(new Error('Google-Anmeldung konnte nicht geladen werden (offline?)'));
+        setTimeout(warte, 100);
+      })();
+    });
+  }
+  async function anmelden(interaktiv) {
+    if (angemeldet()) return tok.access;
+    if (!navigator.onLine) throw new Error('Offline – Anmeldung nicht möglich');
+    await gisBereit();
+    if (!tokenClient) {
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: cfg.clientId, scope: SCOPE,
+        callback: r => {
+          const w = tokenWaiters; tokenWaiters = [];
+          if (r.error) return w.forEach(x => x.rej(new Error('Anmeldung: ' + r.error)));
+          tok = { access: r.access_token, exp: Date.now() + (Number(r.expires_in) || 3600) * 1000 };
+          speicher.set(K.token, tok); melde();
+          w.forEach(x => x.res(tok.access));
+        },
+        error_callback: e => { const w = tokenWaiters; tokenWaiters = []; w.forEach(x => x.rej(new Error(e.type === 'popup_closed' ? 'Anmeldung abgebrochen' : 'Anmeldung fehlgeschlagen (' + e.type + ')'))); }
+      });
+    }
+    return new Promise((res, rej) => {
+      tokenWaiters.push({ res, rej });
+      if (tokenWaiters.length === 1) tokenClient.requestAccessToken({ prompt: interaktiv ? '' : 'none' });
+    });
+  }
+
+  async function api(pfad, opt = {}, nochmal = true) {
+    const access = await anmelden(false).catch(e => { const f = new Error('Bitte neu anmelden'); f.login = true; f.grund = e; throw f; });
+    const r = await fetch(API + cfg.sheetId + pfad, {
+      method: opt.method || 'GET',
+      headers: Object.assign({ Authorization: 'Bearer ' + access }, opt.body ? { 'Content-Type': 'application/json' } : {}),
+      body: opt.body ? JSON.stringify(opt.body) : undefined
+    });
+    if (r.status === 401 && nochmal) { tok = null; speicher.del(K.token); return api(pfad, opt, false); }
+    if (!r.ok) {
+      let msg = r.status + ' ' + r.statusText;
+      try { const j = await r.json(); msg = (j.error && j.error.message) || msg; } catch (e) {}
+      if (r.status === 404) msg = 'Sheet nicht gefunden – stimmt die Sheet-ID?';
+      if (r.status === 403) msg = 'Kein Zugriff aufs Sheet (' + msg + ')';
+      throw new Error(msg);
+    }
+    return r.json();
+  }
+  const batch = requests => api(':batchUpdate', { method: 'POST', body: { requests } });
+
+  async function blattIds() {
+    if (sheetIds) return sheetIds;
+    const j = await api('?fields=sheets.properties(sheetId,title)');
+    sheetIds = {}; j.sheets.forEach(s => sheetIds[s.properties.title] = s.properties.sheetId);
+    ['Buchungen', 'Kategorien', 'Regeln', 'Einstellungen'].forEach(n => { if (sheetIds[n] === undefined) throw new Error('Blatt «' + n + '» fehlt im Sheet'); });
+    return sheetIds;
+  }
+
+  /* ---------------- Umrechnungen ---------------- */
+  const iso = d => d.toISOString().slice(0, 10);
+  function datumAus(v) {
+    if (typeof v === 'number') return iso(new Date(Math.round((v - 25569) * 864e5)));
+    const s = String(v || '').trim();
+    let m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+    if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+    return s.slice(0, 10);
+  }
+  const serial = isoStr => { const [y, m, d] = isoStr.split('-').map(Number); return Date.UTC(y, m - 1, d) / 864e5 + 25569; };
+  const num = v => typeof v === 'number' ? v : (Number(String(v || '').replace(/['\s]/g, '')) || 0);
+  const str = v => v === undefined || v === null ? '' : String(v);
+
+  function buchungAusZeile(r, i) {
+    return { row: i + 2, datum: datumAus(r[0]), jahr: num(r[1]), monat: num(r[2]), typ: str(r[3]), betrag: num(r[4]),
+      kategorie: str(r[5]), notiz: str(r[6]), konto: str(r[7]), banktext: str(r[8]), quelle: str(r[9]),
+      status: str(r[10]), tags: str(r[11]), key: str(r[12]) };
+  }
+
+  /* ---------------- Laden ---------------- */
+  async function laden() {
+    const ranges = ['Buchungen!A2:M', 'Kategorien!A2:D', 'Regeln!A2:G', 'Einstellungen!A2:B'].map(r => 'ranges=' + encodeURIComponent(r)).join('&');
+    const j = await api('/values:batchGet?' + ranges + '&valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=SERIAL_NUMBER');
+    const [b, k, r, e] = j.valueRanges.map(v => v.values || []);
+    const einst = {}; e.forEach(x => { if (x[0]) einst[String(x[0])] = x[1]; });
+    D = {
+      buchungen: b.map(buchungAusZeile).filter(x => x.datum),
+      kategorien: k.filter(x => x[0] && !String(x[0]).startsWith('Typen'))
+        .map(x => ({ name: str(x[0]), gruppe: str(x[1]), budget: num(x[2]), bemerkung: str(x[3]) })),
+      regelnRows: r, einst, stand: Date.now()
+    };
+    speicher.set(K.cache, D); melde();
+    return D;
+  }
+  const cache = () => D;
+
+  /* ---------------- Lesen (wie Code.gs) ---------------- */
+  function getDataSync(jahr) {
+    const alle = D ? D.buchungen : [];
+    const jahre = [...new Set(alle.map(b => b.jahr))].filter(Boolean).sort();
+    const j = Number(jahr) || jahre[jahre.length - 1] || new Date().getFullYear();
+    return { jahr: j, jahre, buchungen: alle.filter(b => b.jahr === j), offen: alle.filter(b => b.status === 'prüfen'),
+      kategorien: D ? D.kategorien : [], offline: !navigator.onLine, warteschlange: queue.length };
+  }
+  async function getData(jahr) {
+    if (navigator.onLine) {
+      try { await sync(); await laden(); }
+      catch (e) { if (!D || e.login) throw e; }   // mit Cache weiterarbeiten
+    }
+    if (!D) throw new Error('Noch keine Daten auf diesem Gerät – bitte online öffnen');
+    return getDataSync(jahr);
+  }
+  async function search(q, jahr, kategorie) {
+    const needle = String(q || '').toLowerCase().trim();
+    return (D ? D.buchungen : []).filter(b =>
+      (!jahr || b.jahr === Number(jahr)) && (!kategorie || b.kategorie === kategorie) &&
+      (!needle || [b.notiz, b.kategorie, b.banktext, b.konto].join(' ').toLowerCase().includes(needle))
+    ).slice(-500).reverse();
+  }
+
+  /* ---------------- Schreiben ---------------- */
+  const FMT_DATUM = { numberFormat: { type: 'DATE', pattern: 'dd.mm.yyyy' } };
+  const FMT_BETRAG = { numberFormat: { type: 'NUMBER', pattern: '#,##0.00' } };
+  function zellen(b) {
+    const [y, m] = b.datum.split('-').map(Number);
+    const v = [
+      { userEnteredValue: { numberValue: serial(b.datum) }, userEnteredFormat: FMT_DATUM },
+      { userEnteredValue: { numberValue: y } }, { userEnteredValue: { numberValue: m } },
+      { userEnteredValue: { stringValue: b.typ || 'Ausgabe' } },
+      { userEnteredValue: { numberValue: Math.round(Number(b.betrag) * 100) / 100 }, userEnteredFormat: FMT_BETRAG }
+    ];
+    ['kategorie', 'notiz', 'konto', 'banktext', 'quelle', 'status', 'tags', 'key'].forEach((f, i) => {
+      const def = { quelle: 'App', status: 'ok' }[f] || '';
+      v.push({ userEnteredValue: { stringValue: str(b[f]) || def } });
+    });
+    return { values: v };
+  }
+  async function anhaengen(liste) {
+    if (!liste.length) return;
+    const ids = await blattIds();
+    for (let i = 0; i < liste.length; i += 500) {     // in Paketen, damit die Anfragen klein bleiben
+      await batch([{ appendCells: { sheetId: ids.Buchungen, rows: liste.slice(i, i + 500).map(zellen), fields: 'userEnteredValue,userEnteredFormat.numberFormat' } }]);
+    }
+    await batch([{ sortRange: { range: { sheetId: ids.Buchungen, startRowIndex: 1, startColumnIndex: 0, endColumnIndex: NCOLS }, sortSpecs: [{ dimensionIndex: 0, sortOrder: 'ASCENDING' }] } }]);
+  }
+
+  /** Steht in Zeile `row` noch die erwartete Buchung? Sonst suchen (Zeilen verschieben sich). */
+  async function zeileFinden(row, expect) {
+    row = Number(row);
+    const passt = b => expect.key ? b.key === String(expect.key)
+      : b.datum === String(expect.datum) && Math.abs(b.betrag - Number(expect.betrag)) < 0.005 && b.banktext === String(expect.banktext || '');
+    if (row >= 2) {
+      const j = await api('/values/' + encodeURIComponent('Buchungen!A' + row + ':M' + row) + '?valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=SERIAL_NUMBER');
+      if (j.values && j.values[0] && passt(buchungAusZeile(j.values[0], row - 2))) return row;
+    }
+    await laden();
+    const treffer = D.buchungen.filter(passt).sort((a, b) => Math.abs(a.row - row) - Math.abs(b.row - row));
+    if (!treffer.length) throw new Error('Diese Buchung wurde inzwischen geändert oder gelöscht. Bitte neu laden.');
+    return treffer[0].row;
+  }
+
+  async function onlineAdd(b) {
+    if (!b || !b.datum || !b.betrag) throw new Error('Datum und Betrag sind nötig.');
+    await anhaengen([Object.assign({ quelle: 'Manuell', status: 'ok' }, b)]);
+  }
+  async function onlineUpdate(row, changes, regel, expect) {
+    const r = expect ? await zeileFinden(row, expect) : Number(row);
+    const spalten = { typ: 'D', betrag: 'E', kategorie: 'F', notiz: 'G', tags: 'L' };
+    const data = Object.entries(spalten).filter(([f]) => changes[f] !== undefined)
+      .map(([f, c]) => ({ range: 'Buchungen!' + c + r, values: [[f === 'betrag' ? Number(changes[f]) : changes[f]]] }));
+    data.push({ range: 'Buchungen!K' + r, values: [[changes.status || 'ok']] });
+    await api('/values:batchUpdate', { method: 'POST', body: { valueInputOption: 'RAW', data } });
+    if (regel && regel.suchbegriff) {   // neue Regel zuoberst, damit sie vor allgemeinen Regeln greift
+      const ids = await blattIds();
+      const werte = [regel.suchbegriff, regel.richtung || 'beide', regel.typ || changes.typ || 'Ausgabe', regel.kategorie || changes.kategorie || '', '', '', changes.notiz || ''];
+      await batch([
+        { insertDimension: { range: { sheetId: ids.Regeln, dimension: 'ROWS', startIndex: 1, endIndex: 2 }, inheritFromBefore: false } },
+        { updateCells: { start: { sheetId: ids.Regeln, rowIndex: 1, columnIndex: 0 }, rows: [{ values: werte.map(w => ({ userEnteredValue: { stringValue: w } })) }], fields: 'userEnteredValue' } }
+      ]);
+    }
+  }
+  async function onlineDelete(row, expect) {
+    const r = expect ? await zeileFinden(row, expect) : Number(row);
+    const ids = await blattIds();
+    await batch([{ deleteDimension: { range: { sheetId: ids.Buchungen, dimension: 'ROWS', startIndex: r - 1, endIndex: r } } }]);
+  }
+
+  /* ---------------- Offline-Warteschlange ---------------- */
+  const OPS = { add: onlineAdd, update: onlineUpdate, delete: onlineDelete };
+  let syncLaeuft = null;
+  function sync() {
+    if (syncLaeuft) return syncLaeuft;
+    syncLaeuft = (async () => {
+      while (queue.length && navigator.onLine) {
+        const op = queue[0];
+        try { await OPS[op.op](...op.args); }
+        catch (e) {
+          if (e.login || !navigator.onLine || /Failed to fetch|NetworkError/i.test(e.message)) throw e;   // später nochmal
+          op.fehler = e.message;   // inhaltlicher Fehler: nicht endlos wiederholen
+          speicher.set(K.queue + '.fehler', (speicher.get(K.queue + '.fehler') || []).concat(op));
+        }
+        queue.shift(); speicher.set(K.queue, queue); melde();
+      }
+    })().finally(() => { syncLaeuft = null; });
+    return syncLaeuft;
+  }
+  const istNetzfehler = e => !navigator.onLine || /Failed to fetch|NetworkError|Load failed/i.test(e.message);
+
+  /** Online direkt schreiben, offline (oder bei Netzfehler) in die Warteschlange und lokal vormerken */
+  async function schreiben(op, args, lokal) {
+    if (navigator.onLine) {
+      try { await sync(); await OPS[op](...args); return true; }
+      catch (e) { if (!istNetzfehler(e)) throw e; }
+    }
+    queue.push({ op, args, zeit: Date.now() }); speicher.set(K.queue, queue);
+    if (D) { lokal(D); speicher.set(K.cache, D); }
+    melde();
+    return true;
+  }
+
+  function addBuchung(b) {
+    if (!b || !b.datum || !b.betrag) return Promise.reject(new Error('Datum und Betrag sind nötig.'));
+    return schreiben('add', [b], d => {
+      const [y, m] = b.datum.split('-').map(Number);
+      d.buchungen.push(Object.assign({ row: 0, jahr: y, monat: m, quelle: 'Manuell', status: 'ok', tags: '', key: '', banktext: '' }, b));
+    });
+  }
+  function updateBuchung(row, changes, regel, expect) {
+    return schreiben('update', [row, changes, regel, expect], d => {
+      const b = d.buchungen.find(x => expect && (expect.key ? x.key === expect.key : x.datum === expect.datum && x.betrag === expect.betrag && x.banktext === expect.banktext));
+      if (b) Object.assign(b, changes, { status: changes.status || 'ok' });
+    });
+  }
+  function deleteBuchung(row, expect) {
+    return schreiben('delete', [row, expect], d => {
+      const i = d.buchungen.findIndex(x => expect && (expect.key ? x.key === expect.key : x.datum === expect.datum && x.betrag === expect.betrag && x.banktext === expect.banktext));
+      if (i >= 0) d.buchungen.splice(i, 1);
+    });
+  }
+
+  /* ---------------- Import ---------------- */
+  async function importCsv(text, datei, dryRun) {
+    if (!navigator.onLine) throw new Error('Import geht nur online');
+    await sync(); await laden();
+    const res = Logik.auswerten(text, datei, { regeln: Logik.regelnAusZeilen(D.regelnRows), vorhanden: D.buchungen, einst: D.einst });
+    if (!dryRun) { await anhaengen(res.neu); await laden(); }
+    return { format: res.format, datei, total: res.total, neu: res.neu.length, offen: res.offen, doppelt: res.doppelt,
+      ignoriert: res.ignoriert, hinweise: res.hinweise, vorschau: res.neu.slice(0, 200) };
+  }
+
+  window.addEventListener('online', () => { sync().then(() => queue.length || laden()).catch(() => {}).finally(melde); });
+  window.addEventListener('offline', melde);
+
+  return { konfiguriert, konfigurieren, config: () => Object.assign({}, cfg), anmelden, abmelden, angemeldet, status,
+    onStatus: f => { listeners.add(f); return () => listeners.delete(f); },
+    cache, getDataSync, getData, search, addBuchung, updateBuchung, deleteBuchung, importCsv, sync };
+})();
+if (typeof module !== 'undefined') module.exports = Daten;

@@ -1,0 +1,6 @@
+# Niemals Daten ins Repo
+*.csv
+*.xlsx
+*.xls
+*.pdf
+.DS_Store
