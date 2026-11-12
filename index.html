@@ -59,7 +59,7 @@
   select, input, button { font:inherit; color:inherit; }
   .field { display:block; }
   .field > span { display:block; font-size:13px; font-weight:600; color:var(--muted); margin-bottom:var(--s1); }
-  select, input[type=text], input[type=date], input[type=search] {
+  select, input[type=text], input[type=date], input[type=search], input[type=password] {
     width:100%; min-height:44px; padding:10px 12px; background:var(--surface);
     border:1px solid var(--line); border-radius:var(--r-md); }
   .invalid { border-color:var(--bad) !important; box-shadow:0 0 0 1px var(--bad); }
@@ -247,6 +247,19 @@
   .vkonto + .vkonto { border-top:1px solid var(--line); }
   #vdlg .field > span { display:flex; justify-content:space-between; }
 
+  /* ---------- App-Sperre ---------- */
+  .sperre { position:fixed; inset:0; z-index:50; display:grid; place-items:center; padding:var(--s4);
+            background:var(--bg); }
+  .sperre[hidden] { display:none !important; }
+  .sperre-box { width:min(360px, 100%); text-align:center; }
+  .sperre-box .field { text-align:left; }
+  .sperre-ico { display:grid; place-items:center; width:64px; height:64px; margin:0 auto; border-radius:20px;
+                background:var(--accent-soft); color:var(--accent); }
+  #sPin { font-size:22px; letter-spacing:.3em; text-align:center; }
+  body.gesperrt > header, body.gesperrt > main, body.gesperrt > nav, body.gesperrt > .toast, body.gesperrt > dialog,
+  body.verdeckt > header, body.verdeckt > main, body.verdeckt > nav, body.verdeckt > .toast, body.verdeckt > dialog { visibility:hidden; }
+  body.verdeckt { background:var(--bg); }
+
   /* ---------- Status & Einrichtung ---------- */
   .chip { display:inline-flex; align-items:center; gap:6px; min-height:32px; padding:4px 12px; border-radius:99px; font-size:13px; font-weight:600;
           background:var(--surface-2); color:var(--muted); border:0; }
@@ -280,6 +293,7 @@
   <button type="button" id="statusChip" class="chip" hidden></button>
   <label class="sr" for="jahr">Jahr</label>
   <select id="jahr" style="width:auto"></select>
+  <button type="button" class="icon-btn" id="btnEinst" aria-label="Einstellungen"><span data-ico="gear"></span></button>
 </header>
 
 <main>
@@ -411,6 +425,37 @@
   </form>
 </dialog>
 
+<!-- Sperrbildschirm -->
+<div id="sperre" class="sperre" hidden role="dialog" aria-modal="true" aria-labelledby="sperreTitel">
+  <div class="sperre-box stack">
+    <span class="sperre-ico" data-ico="lock"></span>
+    <b id="sperreTitel" style="font-size:20px">Budget ist gesperrt</b>
+    <button type="button" id="sBio" style="width:100%" hidden>Mit Fingerabdruck / Touch ID entsperren</button>
+    <form id="sPinForm" class="stack" novalidate autocomplete="off">
+      <label class="field"><span>PIN</span>
+        <input type="password" id="sPin" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" enterkeyhint="done"></label>
+      <button type="submit" class="ghost" style="width:100%">Entsperren</button>
+    </form>
+    <div id="sFehler" class="small neg" aria-live="assertive"></div>
+  </div>
+</div>
+
+<!-- Einstellungen -->
+<dialog id="edlg" aria-labelledby="edlgTitel">
+  <div class="stack" style="padding:var(--s4) var(--s4) var(--s5)">
+    <div class="row" style="align-items:flex-start">
+      <b id="edlgTitel" class="grow" style="font-size:18px">Einstellungen</b>
+      <button type="button" class="icon-btn" id="eClose" aria-label="Schliessen"><span data-ico="x"></span></button>
+    </div>
+    <div class="section" style="margin:0">App-Sperre</div>
+    <div id="eSperre" class="stack"></div>
+    <div class="section" style="margin:var(--s4) 0 0">Konto</div>
+    <div class="small muted" id="eKontoInfo"></div>
+    <div class="row"><button type="button" class="ghost grow" id="eSetup">Einrichtung ändern</button>
+      <button type="button" class="ghost danger grow" id="eAbmelden">Abmelden</button></div>
+  </div>
+</dialog>
+
 <!-- Kontostände erfassen -->
 <dialog id="vdlg" aria-labelledby="vdlgTitel">
   <form id="vForm" class="stack" novalidate>
@@ -436,6 +481,7 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="logik.js"></script>
 <script src="daten.js"></script>
+<script src="sperre.js"></script>
 <script>
 /* ---------- Konstanten & Zustand ---------- */
 const MONATE = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
@@ -479,10 +525,12 @@ const ICONS = {
   search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
   plus:   '<path d="M12 5v14M5 12h14"/>',
   chev:   '<path d="m9 6 6 6-6 6"/>',
-  x:      '<path d="M6 6l12 12M18 6 6 18"/>'
+  x:      '<path d="M6 6l12 12M18 6 6 18"/>',
+  lock:   '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  gear:   '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>'
 };
 const ico = (n, cls = '', size = 22) => `<svg class="ico ${cls}" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
-$$('[data-ico]').forEach(el => el.innerHTML = ico(el.dataset.ico, '', el.closest('.drop') ? 32 : 22));
+$$('[data-ico]').forEach(el => el.innerHTML = ico(el.dataset.ico, '', el.closest('.drop, .sperre-ico') ? 32 : 22));
 
 const typOpts = sel => TYPEN.map(([v, l]) => `<option value="${v}" ${v === sel ? 'selected' : ''}>${l}</option>`).join('');
 function katOpts(sel, leer = 'Kategorie wählen …') {
@@ -527,6 +575,7 @@ function setView(v) {
   $$('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
   jahrSichtbar();
   document.body.classList.toggle('ohne-nav', v === 'setup' || v === 'login');
+  $('#btnEinst').hidden = v === 'setup' || v === 'login';
   renderTitle();
   if (v === 'pruefen' && pruefenStale && D) renderPruefen();
   if (v === 'erfassen') setTimeout(() => $('#eBetrag').focus(), 50);
@@ -1363,7 +1412,119 @@ $('#statusChip').onclick = () => { if (!Daten.status().angemeldet && navigator.o
 Daten.onStatus(s => renderStatus(s));
 setInterval(() => renderStatus(), 30000);   // Anmeldung läuft nach einer Stunde ab
 
+/* ---------- App-Sperre ---------- */
+let verstecktSeit = 0, bioLaeuft = false;
+function sperren() {
+  if (!Sperre.aktiv()) return;
+  $$('dialog[open]').forEach(d => d.close());
+  document.body.classList.add('gesperrt'); document.body.classList.remove('verdeckt');
+  $('#sperre').hidden = false; $('#sPin').value = ''; $('#sFehler').textContent = '';
+  $('#sBio').hidden = !Sperre.hatBiometrie();
+  if (Sperre.hatBiometrie()) setTimeout(bioEntsperren, 300); else setTimeout(() => $('#sPin').focus(), 50);
+}
+function entsperren() {
+  $('#sperre').hidden = true;
+  document.body.classList.remove('gesperrt', 'verdeckt');
+}
+async function bioEntsperren() {
+  if (bioLaeuft || $('#sperre').hidden) return;
+  bioLaeuft = true;
+  try {
+    if (await Sperre.biometriePruefen()) entsperren();
+    else $('#sFehler').textContent = 'Nicht bestätigt – bitte PIN eingeben.';
+  } catch (e) {
+    // abgebrochen oder ohne Tippen nicht erlaubt: still auf PIN/Knopf ausweichen
+    if (!['NotAllowedError', 'AbortError'].includes(e.name)) $('#sFehler').textContent = 'Biometrie nicht verfügbar – bitte PIN eingeben.';
+  } finally { bioLaeuft = false; }
+}
+$('#sBio').onclick = bioEntsperren;
+$('#sPinForm').onsubmit = async e => {
+  e.preventDefault();
+  const pin = $('#sPin').value.trim();
+  if (!pin) return $('#sPin').focus();
+  try { if (await Sperre.pinPruefen(pin)) return entsperren(); $('#sFehler').textContent = 'Falsche PIN.'; }
+  catch (err) { $('#sFehler').textContent = err.message; }
+  $('#sPin').value = ''; $('#sPin').focus();
+};
+// Beim Wechsel in eine andere App sofort verdecken (Vorschau im App-Umschalter), nach der Sperrzeit sperren
+document.addEventListener('visibilitychange', () => {
+  if (!Sperre.aktiv() || document.body.classList.contains('gesperrt')) return;
+  if (document.hidden) { verstecktSeit = Date.now(); document.body.classList.add('verdeckt'); }
+  else if (Date.now() - verstecktSeit >= Sperre.minuten() * 60000) sperren();
+  else document.body.classList.remove('verdeckt');
+});
+
+/* ---------- Einstellungen ---------- */
+const pinFeld = (id, label, auto) => `<label class="field"><span>${label}</span>
+  <input type="password" id="${id}" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="${auto}"></label>`;
+async function renderEinst() {
+  const el = $('#eSperre');
+  const bio = await Sperre.biometrieMoeglich();
+  const c = Daten.config(), s = Daten.status();
+  $('#eKontoInfo').textContent = `Google-Sheet …${(c.sheetId || '').slice(-6)} · ${s.angemeldet ? 'angemeldet' : 'nicht angemeldet'}`;
+  if (!Sperre.aktiv()) {
+    el.innerHTML = `<p class="small muted" style="margin:0">Schützt die Anzeige mit einer PIN${bio ? ' und Fingerabdruck / Touch ID' : ''}.
+        Gilt nur auf diesem Gerät. Deine Daten im Google Sheet sind zusätzlich durch dein Google-Konto geschützt.</p>
+      <form id="fPinNeu" class="stack" novalidate><div class="grid2">${pinFeld('pin1', 'Neue PIN (4–8 Ziffern)', 'new-password')}${pinFeld('pin2', 'PIN wiederholen', 'new-password')}</div>
+        <button type="submit" style="width:100%">App-Sperre einschalten</button></form>`;
+    $('#fPinNeu').onsubmit = async e => {
+      e.preventDefault();
+      const a = $('#pin1').value.trim(), b = $('#pin2').value.trim();
+      if (!/^\d{4,8}$/.test(a)) { markInvalid($('#pin1')); return toast('Die PIN braucht 4 bis 8 Ziffern'); }
+      if (a !== b) { markInvalid($('#pin2')); return toast('Die beiden PINs stimmen nicht überein'); }
+      await Sperre.pinSetzen(a);
+      toast('App-Sperre eingeschaltet'); renderEinst();
+    };
+    return;
+  }
+  el.innerHTML = `<div class="status gruen"><span aria-hidden="true">✓</span>App-Sperre ist eingeschaltet</div>
+    ${bio ? (Sperre.hatBiometrie()
+        ? `<div class="row"><span class="grow small">Fingerabdruck / Touch ID ist eingerichtet</span><button type="button" class="ghost" id="eBioAus">Entfernen</button></div>`
+        : `<button type="button" id="eBioAn" style="width:100%">Fingerabdruck / Touch ID einrichten</button>`)
+      : '<div class="small muted">Fingerabdruck / Touch ID ist auf diesem Gerät nicht verfügbar – die PIN funktioniert.</div>'}
+    <label class="field"><span>Sperren nach</span><select id="eMin">${[[0, 'sofort beim Verlassen'], [1, '1 Minute'], [5, '5 Minuten'], [15, '15 Minuten']]
+      .map(([v, l]) => `<option value="${v}" ${v === Sperre.minuten() ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    <button type="button" class="ghost" id="eJetzt" style="width:100%">Jetzt sperren</button>
+    <details><summary>PIN ändern</summary><form id="fPinAendern" class="stack" novalidate style="margin-top:var(--s2)">
+      ${pinFeld('pinA', 'Aktuelle PIN', 'current-password')}<div class="grid2">${pinFeld('pinN1', 'Neue PIN', 'new-password')}${pinFeld('pinN2', 'Wiederholen', 'new-password')}</div>
+      <button type="submit" style="width:100%">PIN speichern</button></form></details>
+    <details><summary>App-Sperre ausschalten</summary><form id="fAus" class="stack" novalidate style="margin-top:var(--s2)">
+      ${pinFeld('pinAus', 'Aktuelle PIN', 'current-password')}<button type="submit" class="ghost danger" style="width:100%">Ausschalten</button></form></details>`;
+  if ($('#eBioAn')) $('#eBioAn').onclick = async () => {
+    try { await Sperre.biometrieEinrichten(); toast('Fingerabdruck / Touch ID eingerichtet'); }
+    catch (e) { toast(e.name === 'NotAllowedError' ? 'Einrichtung abgebrochen' : 'Einrichtung fehlgeschlagen: ' + e.message, { error: e.name !== 'NotAllowedError' }); }
+    renderEinst();
+  };
+  if ($('#eBioAus')) $('#eBioAus').onclick = () => { Sperre.biometrieEntfernen(); toast('Biometrie entfernt – den Passkey kannst du im Passwort-Manager löschen'); renderEinst(); };
+  $('#eMin').onchange = e => { Sperre.setzeMinuten(+e.target.value); toast('Gespeichert'); };
+  $('#eJetzt').onclick = () => { $('#edlg').close(); sperren(); };
+  const pruefe = async (id) => {
+    try { if (await Sperre.pinPruefen($('#' + id).value.trim())) return true; markInvalid($('#' + id)); toast('Falsche PIN', { error:true }); }
+    catch (e) { toast(e.message, { error:true }); }
+    return false;
+  };
+  $('#fPinAendern').onsubmit = async e => {
+    e.preventDefault();
+    const a = $('#pinN1').value.trim(), b = $('#pinN2').value.trim();
+    if (!/^\d{4,8}$/.test(a)) { markInvalid($('#pinN1')); return toast('Die PIN braucht 4 bis 8 Ziffern'); }
+    if (a !== b) { markInvalid($('#pinN2')); return toast('Die beiden PINs stimmen nicht überein'); }
+    if (!await pruefe('pinA')) return;
+    await Sperre.pinSetzen(a); toast('PIN geändert'); renderEinst();
+  };
+  $('#fAus').onsubmit = async e => {
+    e.preventDefault();
+    if (!await pruefe('pinAus')) return;
+    Sperre.ausschalten(); toast('App-Sperre ausgeschaltet'); renderEinst();
+  };
+}
+$('#btnEinst').onclick = async () => { await renderEinst(); $('#edlg').showModal(); };
+$('#eClose').onclick = () => $('#edlg').close();
+$('#edlg').addEventListener('click', e => { if (e.target === $('#edlg')) $('#edlg').close(); });
+$('#eSetup').onclick = () => { $('#edlg').close(); $('#btnSetupAendern').click(); };
+$('#eAbmelden').onclick = () => { Daten.abmelden(); $('#edlg').close(); setView('login'); toast('Abgemeldet'); };
+
 function start() {
+  if (Sperre.aktiv()) sperren();
   if (!Daten.konfiguriert()) { setView('setup'); renderStatus(); return; }
   renderTabs();
   setView('uebersicht');

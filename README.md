@@ -16,6 +16,7 @@ der Person, die die App benutzt. Dieses Repository enthält nur die Oberfläche,
 | `index.html` | Oberfläche |
 | `daten.js` | Login, Sheets-API, Offline-Warteschlange |
 | `logik.js` | CSV-Erkennung, Regeln, Doppel-Erkennung |
+| `sperre.js` | App-Sperre: PIN (PBKDF2-Hash) und Biometrie (Passkey) |
 | `sw.js` | Service Worker (App offline starten) |
 
 ## Lokal testen
