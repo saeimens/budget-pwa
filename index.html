@@ -112,6 +112,21 @@
   .tx .t { font-weight:500; }
   .pill { display:inline-block; font-size:12px; font-weight:600; padding:1px 8px; border-radius:99px; background:var(--accent-soft); color:var(--accent); }
   .pill.warn { background:var(--warn-soft); color:var(--warn); }
+  .pill.bad { background:var(--bad-soft); color:var(--bad); }
+  .pill.ok { background:var(--accent-soft); color:var(--accent); }
+  .pill.neutral { background:var(--surface-2); color:var(--muted); }
+
+  /* ---------- Jahresrechnungen (Plan vs. bezahlt) ---------- */
+  .meter { position:relative; height:8px; border-radius:99px; background:var(--surface-2); margin:var(--s2) 0 6px; }
+  .meter > .fill { position:absolute; left:0; top:0; bottom:0; border-radius:99px; background:var(--accent); }
+  .meter.gelb > .fill { background:var(--warn); } .meter.rot > .fill { background:var(--bad); }
+  .meter > .soll { position:absolute; top:-3px; bottom:-3px; width:2px; margin-left:-1px; border-radius:1px; background:var(--ink); }
+  .rrow { padding:var(--s3) 0; } .rrow + .rrow, .rrow-wrap + .rrow-wrap { border-top:1px solid var(--line); }
+  .status { display:inline-flex; align-items:center; gap:6px; font-size:14px; font-weight:600; }
+  button.card.stat { padding:var(--s4); background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg);
+                     box-shadow:var(--shadow); text-align:left; cursor:pointer; }
+  button.card.stat:hover { border-color:color-mix(in srgb, var(--accent) 40%, var(--line)); }
+  .status.gruen, .status.erledigt { color:var(--accent); } .status.gelb { color:var(--warn); } .status.rot { color:var(--bad); }
 
   .chart { display:flex; align-items:flex-end; gap:var(--s1); height:110px; margin-top:var(--s3); }
   .chart .c { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:var(--s1); height:100%; }
@@ -472,7 +487,7 @@ $$('nav button').forEach(b => b.onclick = () => setView(b.dataset.v));
 
 function renderTitle() {
   let t = VIEW_TITEL[view];
-  if (!t) t = !D ? 'Budget' : monat === -1 ? 'Jahresvergleich' : monat === 0 ? `Jahr ${D.jahr}` : `${MONATE_LANG[monat - 1]} ${D.jahr}`;
+  if (!t) t = !D ? 'Budget' : monat === -1 ? 'Jahresvergleich' : monat === -2 ? `Jahresrechnungen ${D.jahr}` : monat === 0 ? `Jahr ${D.jahr}` : `${MONATE_LANG[monat - 1]} ${D.jahr}`;
   $('#title').textContent = t;
   document.title = t === 'Budget' ? 'Budget' : `${t} · Budget`;
 }
@@ -519,16 +534,19 @@ $('#jahr').onchange = e => {
 /* ---------- Übersicht ---------- */
 function renderMonate() {
   const btns = [`<button type="button" data-m="-1" class="${monat === -1 ? 'on' : ''}" aria-pressed="${monat === -1}">Vergleich</button>`,
+    `<button type="button" data-m="-2" class="${monat === -2 ? 'on' : ''}" aria-pressed="${monat === -2}">Jahresrechnungen</button>`,
     `<button type="button" data-m="0" class="${monat === 0 ? 'on' : ''}" aria-pressed="${monat === 0}">Ganzes Jahr</button>`]
     .concat(MONATE.map((m, i) => `<button type="button" data-m="${i + 1}" class="${monat === i + 1 ? 'on' : ''}" aria-pressed="${monat === i + 1}" aria-label="${MONATE_LANG[i]}">${m}</button>`));
   $('#monate').innerHTML = btns.join('');
   $$('#monate button').forEach(b => b.onclick = () => waehleMonat(+b.dataset.m));
   const on = $('#monate .on'); if (on) on.scrollIntoView({ inline:'center', block:'nearest' });
 }
-function waehleMonat(m) { monat = m; offeneKat = null; $('#jahr').hidden = m === -1; renderTitle(); renderMonate(); renderUebersicht(); }
+function waehleMonat(m) { monat = m; offeneKat = null; offenR = null; $('#jahr').hidden = m === -1; renderTitle(); renderMonate(); renderUebersicht(); }
+let offenR = null;   // aufgeklappter Posten bei den Jahresrechnungen
 
 function renderUebersicht() {
   if (monat === -1) return renderVergleich();
+  if (monat === -2) return renderRueck();
   const imZ = D.buchungen.filter(b => monat === 0 || b.monat === monat);
   const nachTyp = t => imZ.filter(b => b.typ === t);
   AUS = nachTyp('Ausgabe');
@@ -563,7 +581,9 @@ function renderUebersicht() {
   const stat = (label, wert, cls = '') => `<div class="card stat"><div class="label">${label}</div><div class="value num ${cls}">${wert}</div></div>`;
   const stats = `<div class="stats">
     ${stat('Einnahmen', chf0(sEin))}
-    ${stat('Jahresrechnungen', chf0(sRue))}
+    <button type="button" class="plain card stat" id="zuRueck" aria-label="Jahresrechnungen ${chf0(sRue)} CHF – Plan anzeigen">
+      <span class="label" style="display:flex;justify-content:space-between">Jahresrechnungen ${ico('chev', 'chev', 16)}</span>
+      <span class="value num" style="display:block">${chf0(sRue)}</span></button>
     ${stat('Gespart', chf0(sSpa))}
     ${stat('Saldo <span class="small">(Einnahmen − Rest)</span>', chf0(saldo), saldo < 0 ? 'neg' : 'pos')}</div>`;
 
@@ -594,6 +614,7 @@ function renderUebersicht() {
        <div class="card" style="padding-block:var(--s1)">${txList(ein)}</div></details>` : ''}`;
   renderKats();
   bindTx($('#uebersicht'));
+  $('#zuRueck').onclick = () => waehleMonat(-2);
   $$('.chart .c').forEach(el => el.onclick = () => waehleMonat(+el.dataset.m));
 }
 
@@ -883,8 +904,81 @@ $('#fErfassen').onsubmit = async e => {
   if (D) load(D.jahr);
 };
 
+/* ---------- Jahresrechnungen: Plan vs. bezahlt ---------- */
+const STATUS = {
+  rot:      { t:'Über Plan', i:'✕', rang:0 },
+  gelb:     { t:'Vorbezogen', i:'!', rang:1 },
+  gruen:    { t:'Im Plan', i:'✓', rang:2 },
+  erledigt: { t:'Bezahlt', i:'✓', rang:3 }
+};
+function renderRueck() {
+  const plan = D.rueckstellungen || [];
+  if (!plan.length) {
+    $('#uebersicht').innerHTML = `<div class="card empty" style="margin-top:var(--s3)"><b>Noch kein Plan für Jahresrechnungen</b>
+      <span class="small muted">Lege im Google Sheet ein Blatt «Rückstellungen» an: Posten, Kategorie (wie in den Buchungen), Rate pro Monat, Aktiv (ja/nein).</span></div>`;
+    return;
+  }
+  const jahr = D.jahr, laufend = jahr === CUR_Y;
+  const mon = jahr < CUR_Y ? 12 : laufend ? CUR_M : 0;
+  const rueck = D.buchungen.filter(b => b.typ === 'Rückstellung');
+  const bez = {}; rueck.forEach(b => bez[b.kategorie] = (bez[b.kategorie] || 0) + b.betrag);
+
+  const posten = plan.filter(p => p.aktiv && p.kategorie && p.rate > 0).map(p => {
+    const jahrPlan = p.rate * 12, soll = p.rate * mon, ist = bez[p.kategorie] || 0;
+    let st = 'gruen';
+    if (ist > jahrPlan * 1.05) st = 'rot';
+    else if (ist >= jahrPlan * 0.95) st = 'erledigt';
+    else if (ist > soll * 1.1 && ist > 0) st = 'gelb';
+    return Object.assign({}, p, { jahrPlan, soll, ist, st, offen: Math.max(0, jahrPlan - ist) });
+  }).sort((a, b) => STATUS[a.st].rang - STATUS[b.st].rang || b.offen - a.offen);
+
+  const geplant = new Set(posten.map(p => p.kategorie));
+  const ohnePlan = Object.keys(bez).filter(k => !geplant.has(k) && Math.round(bez[k])).map(k => ({ kategorie: k, ist: bez[k] }));
+
+  const sum = (l, f) => l.reduce((x, p) => x + p[f], 0);
+  const sPlan = sum(posten, 'jahrPlan'), sIst = sum(posten, 'ist'), sOffen = sum(posten, 'offen'), sRate = sum(posten, 'rate');
+  const ueber = posten.filter(p => p.st === 'rot').reduce((x, p) => x + p.ist - p.jahrPlan, 0);
+  const gesamt = ueber > sPlan * 0.1 ? 'rot' : ueber > 0 ? 'gelb' : 'gruen';
+  const gesamtText = { gruen:'Alle Posten im Plan', gelb:'Einzelne Posten über Plan', rot:'Deutlich über Plan' }[gesamt];
+
+  const hero = laufend
+    ? `<div class="card hero"><div class="label">Noch erwartet bis Ende ${jahr}</div>
+        <div class="value num">${chf0(sOffen)} <span class="cur">CHF</span></div>
+        <div class="status ${gesamt}"><span aria-hidden="true">${STATUS[gesamt === 'gelb' ? 'gelb' : gesamt].i}</span>${gesamtText}</div>
+        <div class="small muted" style="margin-top:var(--s1)">Bezahlt ${chf0(sIst)} von geplant ${chf0(sPlan)} · Plan: ${chf0(sRate)} pro Monat zurücklegen</div></div>`
+    : `<div class="card hero"><div class="label">Jahresrechnungen ${jahr}</div>
+        <div class="value num">${chf0(sIst + sum(ohnePlan, 'ist'))} <span class="cur">CHF</span></div>
+        <div class="small muted">Geplant waren ${chf0(sPlan)} (heutige Raten × 12)${ohnePlan.length ? ` · davon ${chf0(sum(ohnePlan, 'ist'))} ohne Plan` : ''}</div></div>`;
+
+  const zeile = p => {
+    const s = STATUS[p.st], max = Math.max(p.jahrPlan, p.ist, 1);
+    const offen = offenR === p.kategorie;
+    const liste = offen ? rueck.filter(b => b.kategorie === p.kategorie).sort((a, b) => b.datum.localeCompare(a.datum)) : [];
+    return `<div class="rrow-wrap"><button type="button" class="plain cat rrow" data-r="${esc(p.kategorie)}" aria-expanded="${offen}">
+        <span class="row"><span class="grow name">${esc(p.posten)}</span>
+          <span class="pill ${{ rot:'bad', gelb:'warn', gruen:'ok', erledigt:'neutral' }[p.st]}"><span aria-hidden="true">${s.i}</span> ${s.t}</span>${ico('chev', 'chev', 18)}</span>
+        <span class="meter ${p.st}" style="display:block" role="img" aria-label="Bezahlt ${chf0(p.ist)} von ${chf0(p.jahrPlan)} CHF${laufend ? `, Plan bis heute ${chf0(p.soll)}` : ''}">
+          <span class="fill" style="width:${Math.min(100, p.ist / max * 100)}%"></span>
+          ${laufend ? `<span class="soll" style="left:${p.soll / max * 100}%"></span>` : ''}</span>
+        <span class="row small"><span class="grow muted">Bezahlt <b class="num" style="color:var(--ink)">${chf0(p.ist)}</b> von ${chf0(p.jahrPlan)}</span>
+          <span class="muted num">${p.st === 'rot' ? `${chf0(p.ist - p.jahrPlan)} über Plan` : p.offen ? `noch ${chf0(p.offen)}` : 'erledigt'}</span></span>
+      </button>${offen ? `<div class="cat-detail">${txList(liste)}${p.bemerkung ? `<div class="small muted" style="padding-bottom:var(--s2)">${esc(p.bemerkung)}</div>` : ''}</div>` : ''}</div>`;
+  };
+
+  $('#uebersicht').innerHTML = `<div style="margin-top:var(--s3)">${hero}</div>
+    <h2 class="section">Posten · antippen für Zahlungen</h2>
+    ${laufend ? `<div class="small muted" style="margin:-4px 0 var(--s2)">Der senkrechte Strich zeigt, wie viel bis heute (${MONATE_LANG[CUR_M - 1]}) geplant war.</div>` : ''}
+    <div class="card" style="padding-block:var(--s1)">${posten.map(zeile).join('')}</div>
+    ${ohnePlan.length ? `<h2 class="section">Ohne Plan bezahlt</h2><div class="card" style="padding-block:var(--s1)">${ohnePlan.map(o => `
+      <div class="rrow row"><span class="grow">${esc(o.kategorie)}</span><span class="num">${chf0(o.ist)}</span></div>`).join('')}</div>
+      <div class="small muted" style="margin-top:var(--s2)">Für diese Kategorien gibt es im Blatt «Rückstellungen» keinen aktiven Posten.</div>` : ''}`;
+
+  $$('#uebersicht [data-r]').forEach(b => b.onclick = () => { offenR = offenR === b.dataset.r ? null : b.dataset.r; renderRueck(); });
+  bindTx($('#uebersicht'));
+}
+
 /* ---------- Jahresvergleich ---------- */
-const vgl = { a: null, b: null, bis: true, nach: 'gruppe' };
+const vgl ={ a: null, b: null, bis: true, nach: 'gruppe' };
 function deltaHtml(a, b, hoeherIstGut) {
   if (!a) return b ? '<span class="delta neutral">neu</span>' : '';
   const p = (b - a) / Math.abs(a) * 100;

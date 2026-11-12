@@ -122,11 +122,16 @@ const Daten = (() => {
 
   /* ---------------- Laden ---------------- */
   async function laden() {
-    const ranges = ['Buchungen!A2:M', 'Kategorien!A2:D', 'Regeln!A2:G', 'Einstellungen!A2:B'].map(r => 'ranges=' + encodeURIComponent(r)).join('&');
+    const ids = await blattIds();
+    const bereiche = ['Buchungen!A2:M', 'Kategorien!A2:D', 'Regeln!A2:G', 'Einstellungen!A2:B'];
+    if (ids['Rückstellungen'] !== undefined) bereiche.push('Rückstellungen!A2:E');   // optionales Blatt
+    const ranges = bereiche.map(r => 'ranges=' + encodeURIComponent(r)).join('&');
     const j = await api('/values:batchGet?' + ranges + '&valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=SERIAL_NUMBER');
-    const [b, k, r, e] = j.valueRanges.map(v => v.values || []);
+    const [b, k, r, e, rs = []] = j.valueRanges.map(v => v.values || []);
     const einst = {}; e.forEach(x => { if (x[0]) einst[String(x[0])] = x[1]; });
     D = {
+      rueckstellungen: rs.filter(x => x[0] && typeof x[2] === 'number')
+        .map(x => ({ posten: str(x[0]), kategorie: str(x[1]), rate: num(x[2]), aktiv: str(x[3]).trim().toLowerCase() !== 'nein', bemerkung: str(x[4]) })),
       buchungen: b.map(buchungAusZeile).filter(x => x.datum),
       kategorien: k.filter(x => x[0] && !String(x[0]).startsWith('Typen'))
         .map(x => ({ name: str(x[0]), gruppe: str(x[1]), budget: num(x[2]), bemerkung: str(x[3]) })),
@@ -143,7 +148,8 @@ const Daten = (() => {
     const jahre = [...new Set(alle.map(b => b.jahr))].filter(Boolean).sort();
     const j = Number(jahr) || jahre[jahre.length - 1] || new Date().getFullYear();
     return { jahr: j, jahre, alle, buchungen: alle.filter(b => b.jahr === j), offen: alle.filter(b => b.status === 'prüfen'),
-      kategorien: D ? D.kategorien : [], offline: !navigator.onLine, warteschlange: queue.length };
+      kategorien: D ? D.kategorien : [], rueckstellungen: (D && D.rueckstellungen) || [],
+      offline: !navigator.onLine, warteschlange: queue.length };
   }
   async function getData(jahr) {
     if (navigator.onLine) {
