@@ -124,12 +124,19 @@ const Daten = (() => {
   async function laden() {
     const ids = await blattIds();
     const bereiche = ['Buchungen!A2:M', 'Kategorien!A2:D', 'Regeln!A2:G', 'Einstellungen!A2:B'];
-    if (ids['Rückstellungen'] !== undefined) bereiche.push('Rückstellungen!A2:E');   // optionales Blatt
+    // optionale Blätter
+    const hatR = ids['Rückstellungen'] !== undefined, hatV = ids['Vermögen'] !== undefined;
+    if (hatR) bereiche.push('Rückstellungen!A2:E');
+    if (hatV) bereiche.push('Vermögen!A2:E');
     const ranges = bereiche.map(r => 'ranges=' + encodeURIComponent(r)).join('&');
     const j = await api('/values:batchGet?' + ranges + '&valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=SERIAL_NUMBER');
-    const [b, k, r, e, rs = []] = j.valueRanges.map(v => v.values || []);
+    const werte = j.valueRanges.map(v => v.values || []);
+    const [b, k, r, e] = werte, rs = hatR ? werte[4] : [], vm = hatV ? werte[hatR ? 5 : 4] : [];
     const einst = {}; e.forEach(x => { if (x[0]) einst[String(x[0])] = x[1]; });
     D = {
+      vermoegen: vm.filter(x => x[0] && x[1] && x[3] !== '' && x[3] !== undefined)
+        .map(x => ({ datum: datumAus(x[0]), konto: str(x[1]), gruppe: str(x[2]) || 'Flüssig', saldo: num(x[3]), bemerkung: str(x[4]) })),
+      hatVermoegen: hatV,
       rueckstellungen: rs.filter(x => x[0] && typeof x[2] === 'number')
         .map(x => ({ posten: str(x[0]), kategorie: str(x[1]), rate: num(x[2]), aktiv: str(x[3]).trim().toLowerCase() !== 'nein', bemerkung: str(x[4]) })),
       buchungen: b.map(buchungAusZeile).filter(x => x.datum),
@@ -149,6 +156,7 @@ const Daten = (() => {
     const j = Number(jahr) || jahre[jahre.length - 1] || new Date().getFullYear();
     return { jahr: j, jahre, alle, buchungen: alle.filter(b => b.jahr === j), offen: alle.filter(b => b.status === 'prüfen'),
       kategorien: D ? D.kategorien : [], rueckstellungen: (D && D.rueckstellungen) || [],
+      vermoegen: (D && D.vermoegen) || [], hatVermoegen: !!(D && D.hatVermoegen),
       offline: !navigator.onLine, warteschlange: queue.length };
   }
   async function getData(jahr) {
@@ -234,8 +242,21 @@ const Daten = (() => {
     await batch([{ deleteDimension: { range: { sheetId: ids.Buchungen, dimension: 'ROWS', startIndex: r - 1, endIndex: r } } }]);
   }
 
+  /** Kontostände eines Stichtags ins Blatt «Vermögen» (wird bei Bedarf angelegt) */
+  async function onlineKontostaende(datum, liste) {
+    let ids = await blattIds();
+    if (ids['Vermögen'] === undefined) {
+      await batch([{ addSheet: { properties: { title: 'Vermögen', gridProperties: { rowCount: 1000, columnCount: 5, frozenRowCount: 1 } } } }]);
+      sheetIds = null; ids = await blattIds();
+      await api('/values/' + encodeURIComponent('Vermögen!A1:E1') + '?valueInputOption=RAW', { method: 'PUT', body: { values: [['Datum', 'Konto', 'Gruppe', 'Saldo', 'Bemerkung']] } });
+    }
+    const zelle = v => typeof v === 'number' ? { userEnteredValue: { numberValue: v } } : { userEnteredValue: { stringValue: str(v) } };
+    await batch([{ appendCells: { sheetId: ids['Vermögen'], fields: 'userEnteredValue',
+      rows: liste.map(x => ({ values: [datum, x.konto, x.gruppe, Math.round(Number(x.saldo) * 100) / 100, x.bemerkung || ''].map(zelle) })) } }]);
+  }
+
   /* ---------------- Offline-Warteschlange ---------------- */
-  const OPS = { add: onlineAdd, update: onlineUpdate, delete: onlineDelete };
+  const OPS = { add: onlineAdd, update: onlineUpdate, delete: onlineDelete, vermoegen: onlineKontostaende };
   let syncLaeuft = null;
   function sync() {
     if (syncLaeuft) return syncLaeuft;
@@ -287,6 +308,14 @@ const Daten = (() => {
     });
   }
 
+  function kontostaendeErfassen(datum, liste) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(datum) || !liste.length) return Promise.reject(new Error('Stichtag und mindestens ein Konto nötig.'));
+    return schreiben('vermoegen', [datum, liste], d => {
+      d.vermoegen = (d.vermoegen || []).concat(liste.map(x => ({ datum, konto: x.konto, gruppe: x.gruppe, saldo: Number(x.saldo), bemerkung: x.bemerkung || '' })));
+      d.hatVermoegen = true;
+    });
+  }
+
   /* ---------------- Import ---------------- */
   async function importCsv(text, datei, dryRun) {
     if (!navigator.onLine) throw new Error('Import geht nur online');
@@ -302,6 +331,6 @@ const Daten = (() => {
 
   return { konfiguriert, konfigurieren, config: () => Object.assign({}, cfg), anmelden, abmelden, angemeldet, status,
     onStatus: f => { listeners.add(f); return () => listeners.delete(f); },
-    cache, getDataSync, getData, search, addBuchung, updateBuchung, deleteBuchung, importCsv, sync };
+    cache, getDataSync, getData, search, addBuchung, updateBuchung, deleteBuchung, importCsv, kontostaendeErfassen, sync };
 })();
 if (typeof module !== 'undefined') module.exports = Daten;
