@@ -50,7 +50,11 @@ const Logik = (() => {
         konto: kontoName, key: 'UBS|' + (r[ix('Transaktions-Nr.')] || '') + '|' + betrag.toFixed(2)
       });
     });
-    return { format: 'UBS ' + kontoName, rows };
+    // Kopfzeilen «Bis:» und «Schlusssaldo:» → Kontostand am Ende des Auszugs
+    const kopf = n => { const l = lines.find(x => x.startsWith(n + ':')); return l ? l.split(';')[1] : ''; };
+    const bis = String(kopf('Bis') || '').trim(), schluss = kopf('Schlusssaldo');
+    const saldo = /^\d{4}-\d{2}-\d{2}$/.test(bis) && schluss !== '' ? { konto: kontoName, datum: bis, betrag: parseNum(schluss) } : null;
+    return { format: 'UBS ' + kontoName, rows, saldo };
   }
 
   function parseUbsKarte(text) {
@@ -184,7 +188,7 @@ const Logik = (() => {
       neu.push(b);
       if (t.key) keys.add(t.key);
     });
-    return { format: parsed.format, datei, total: parsed.rows.length, neu, offen, doppelt, ignoriert, hinweise: parsed.hinweise || [] };
+    return { format: parsed.format, datei, total: parsed.rows.length, neu, offen, doppelt, ignoriert, hinweise: parsed.hinweise || [], saldo: parsed.saldo || null };
   }
 
   return { parseCsv, parseNum, classify, regelnAusZeilen, auswerten };

@@ -321,9 +321,29 @@ const Daten = (() => {
     if (!navigator.onLine) throw new Error('Import geht nur online');
     await sync(); await laden();
     const res = Logik.auswerten(text, datei, { regeln: Logik.regelnAusZeilen(D.regelnRows), vorhanden: D.buchungen, einst: D.einst });
-    if (!dryRun) { await anhaengen(res.neu); await laden(); }
+    const saldo = saldoPruefen(res.saldo);
+    if (!dryRun) {
+      await anhaengen(res.neu);
+      if (saldo && saldo.uebernehmen) await onlineKontostaende(saldo.datum, [{ konto: saldo.konto, gruppe: saldo.gruppe, saldo: saldo.betrag, bemerkung: 'aus CSV-Import' }]);
+      await laden();
+    }
     return { format: res.format, datei, total: res.total, neu: res.neu.length, offen: res.offen, doppelt: res.doppelt,
-      ignoriert: res.ignoriert, hinweise: res.hinweise, vorschau: res.neu.slice(0, 200) };
+      ignoriert: res.ignoriert, hinweise: res.hinweise, vorschau: res.neu.slice(0, 200), saldo };
+  }
+
+  /** Kontostand aus dem Auszug fürs Blatt «Vermögen» vorbereiten (nur per Monatsende, keine Doppel) */
+  function saldoPruefen(s) {
+    if (!s) return null;
+    const [y, m, d] = s.datum.split('-').map(Number);
+    const vm = D.vermoegen || [];
+    // Kontoname wie im Blatt «Vermögen» (z. B. «Lohnkonto (UBS)»), sonst neu mit «(UBS)»
+    const name = [...new Set(vm.map(v => v.konto))].find(k => k === s.konto || k.startsWith(s.konto + ' ')) || s.konto + ' (UBS)';
+    const vorhanden = vm.filter(v => v.konto === name && v.datum === s.datum).pop();   // zuletzt erfasster Stand gilt
+    const o = { konto: name, gruppe: 'Flüssig', datum: s.datum, betrag: s.betrag, uebernehmen: false, grund: '' };
+    if (new Date(y, m, 0).getDate() !== d) o.grund = 'Auszug endet nicht am Monatsende';
+    else if (vorhanden && Math.abs(vorhanden.saldo - s.betrag) < 0.005) o.grund = 'schon erfasst';
+    else o.uebernehmen = true;
+    return o;
   }
 
   window.addEventListener('online', () => { sync().then(() => queue.length || laden()).catch(() => {}).finally(melde); });

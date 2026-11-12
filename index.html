@@ -893,6 +893,9 @@ async function runImport(dry) {
         <div class="small" style="margin-top:6px"><b>${r.neu} neu</b>${dry ? ' (Vorschau, noch nichts gespeichert)' : ''}
           · <span class="${r.offen ? '' : 'muted'}">${r.offen} zu prüfen</span>
           · <span class="muted">${r.doppelt} schon vorhanden · ${r.ignoriert} ignoriert</span></div>
+        ${r.saldo ? `<div class="small" style="margin-top:6px">${r.saldo.uebernehmen
+          ? `✓ Kontostand ${esc(r.saldo.konto)} per ${datumKurz(r.saldo.datum)}: <b class="num">${chf(r.saldo.betrag)}</b> ${dry ? 'wird ins Vermögen übernommen' : 'ins Vermögen übernommen'}`
+          : `<span class="muted">Kontostand ${esc(r.saldo.konto)} per ${datumKurz(r.saldo.datum)} nicht übernommen: ${esc(r.saldo.grund)}</span>`}</div>` : ''}
         ${r.hinweise.length ? `<div class="small" style="color:var(--warn);margin-top:6px">${r.hinweise.map(esc).join('<br>')}</div>` : ''}
         ${dry && r.vorschau.length ? `<details><summary>Buchungen anzeigen</summary>${r.vorschau.map(b => `
           <div class="tx small" style="cursor:default"><span class="grow"><span class="t">${esc(b.notiz)}</span>
