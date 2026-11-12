@@ -851,9 +851,11 @@ $('#btnSetupAendern').onclick = () => {
 };
 $('#fSetup').onsubmit = e => {
   e.preventDefault();
-  const sheet = $('#sSheet').value.trim(), client = $('#sClient').value.trim();
+  const sheet = $('#sSheet').value.trim();
+  const client = $('#sClient').value.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+  $('#sClient').value = client;
   if (!sheet) return markInvalid($('#sSheet'));
-  if (!/\.apps\.googleusercontent\.com$/.test(client)) { markInvalid($('#sClient')); return toast('Die Client-ID endet auf .apps.googleusercontent.com'); }
+  if (!/^[\w-]+\.apps\.googleusercontent\.com$/.test(client)) { markInvalid($('#sClient')); return toast('Die Client-ID endet auf .apps.googleusercontent.com'); }
   Daten.konfigurieren(client, sheet);
   login();
 };

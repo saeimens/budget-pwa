@@ -28,7 +28,8 @@ const Daten = (() => {
   /* ---------------- Konfiguration & Status ---------------- */
   const konfiguriert = () => !!(cfg.clientId && cfg.sheetId);
   function konfigurieren(clientId, sheetId) {
-    cfg = { clientId: clientId.trim(), sheetId: extrahiereId(sheetId) };
+    // beim Kopieren wird oft «https://» oder ein «/» am Ende mitgenommen
+    cfg = { clientId: clientId.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, ''), sheetId: extrahiereId(sheetId) };
     speicher.set(K.cfg, cfg); sheetIds = null; tokenClient = null;
   }
   function extrahiereId(s) { const m = String(s).match(/\/d\/([a-zA-Z0-9_-]{20,})/); return (m ? m[1] : String(s)).trim(); }
