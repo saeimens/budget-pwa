@@ -1,6 +1,6 @@
 // Service Worker: hält die App-Dateien auf dem Gerät, damit sie auch offline startet.
 // Daten (Google Sheets API) werden NICHT hier gespeichert, sondern von daten.js.
-const VERSION = 'budget-v1';
+const VERSION = 'budget-v2';
 const DATEIEN = ['./', 'index.html', 'logik.js', 'daten.js', 'manifest.webmanifest',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/icon-180.png'];
 
