@@ -142,7 +142,7 @@ const Daten = (() => {
     const alle = D ? D.buchungen : [];
     const jahre = [...new Set(alle.map(b => b.jahr))].filter(Boolean).sort();
     const j = Number(jahr) || jahre[jahre.length - 1] || new Date().getFullYear();
-    return { jahr: j, jahre, buchungen: alle.filter(b => b.jahr === j), offen: alle.filter(b => b.status === 'prüfen'),
+    return { jahr: j, jahre, alle, buchungen: alle.filter(b => b.jahr === j), offen: alle.filter(b => b.status === 'prüfen'),
       kategorien: D ? D.kategorien : [], offline: !navigator.onLine, warteschlange: queue.length };
   }
   async function getData(jahr) {
