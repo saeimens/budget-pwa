@@ -69,3 +69,19 @@ async function runImport(dry) {
 }
 $('#btnVorschau').onclick = () => runImport(true);
 $('#btnImport').onclick = () => runImport(false);
+
+/** Per Android-«Teilen» empfangene Dateien (vom Service Worker zwischengespeichert) in den Import übernehmen */
+async function geteilteDateien() {
+  history.replaceState(null, '', location.pathname);   // ?geteilt aus der Adresse entfernen
+  if (!('caches' in window)) return;
+  const c = await caches.open('budget-geteilt'), dateien = [];
+  for (const k of await c.keys()) {
+    const r = await c.match(k);
+    if (r) dateien.push(new File([await r.blob()], decodeURIComponent(r.headers.get('X-Name') || 'geteilt.csv')));
+    await c.delete(k);
+  }
+  if (!dateien.length) return toast('Keine Datei empfangen', { error:true });
+  setView('import');
+  await handleFiles(dateien);
+  toast(`${dateien.length} Datei${dateien.length === 1 ? '' : 'en'} empfangen – zuerst Vorschau oder gleich importieren`);
+}

@@ -77,6 +77,7 @@ function start() {
   setView('uebersicht');
   renderStatus();
   load(null, { init:true });
+  if (/[?&]geteilt=/.test(location.search)) geteilteDateien().catch(e => toast(e.message, { error:true }));
 }
 start();
 

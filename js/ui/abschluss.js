@@ -66,7 +66,7 @@ function abschlussKarte() {
     <ol class="ab-liste">${a.schritte.map(s => `<li class="row ${s.ok ? 'ok' : ''}">
       <span class="ab-ico ${s.ok ? 'ok' : s.optional ? 'opt' : ''}">${s.ok ? ico('check', '', 16) : ''}</span>
       <span class="grow"><span class="ab-t">${esc(s.titel)}</span>
-        <span class="visually-hidden">${s.ok ? ', erledigt' : s.optional ? ', freiwillig' : ', offen'}</span>
+        <span class="sr">${s.ok ? ', erledigt' : s.optional ? ', freiwillig' : ', offen'}</span>
         <span class="small muted" style="display:block">${esc(s.info)}</span></span>
       ${!s.ok && s.aktion && !(s.optional && s.aktion === 'import') ? `<button type="button" class="ghost klein" data-ab="${s.aktion}">${knopf[s.aktion]}</button>` : ''}
     </li>`).join('')}</ol>

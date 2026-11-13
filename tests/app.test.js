@@ -104,6 +104,16 @@ const tick = (n = 3) => new Promise(r => setTimeout(r, 15 * n));
   abLi[1].querySelector('[data-ab=import]').click(); await tick();
   check('Abschluss: Knopf führt zum Import', $('#v-import').classList.contains('on'));
 
+  // Teilen-Ziel: der Service Worker hat eine Datei zwischengespeichert → App übernimmt sie in den Import
+  let geteiltWeg = 0;
+  w.caches = { open: async () => ({ keys: async () => ['geteilt/0'], delete: async () => { geteiltWeg++; return true; },
+    match: async () => ({ headers: { get: () => encodeURIComponent('Lohnkonto Okt.csv') }, blob: async () => new w.Blob(['a;b\n']) }) }) };
+  doc.querySelector('nav [data-v=uebersicht]').click(); await tick();
+  await w.eval('geteilteDateien()'); await tick();
+  check('Teilen: Import offen, Datei übernommen, Knöpfe aktiv', $('#v-import').classList.contains('on') && /1 Datei gewählt/.test($('#dropTitel').textContent)
+    && !$('#btnImport').disabled && /Lohnkonto Okt\.csv/.test($('#importResult').textContent));
+  check('Teilen: Zwischenspeicher geleert', geteiltWeg === 1);
+
   // Prüfen mit Regel
   doc.querySelector('nav [data-v=pruefen]').click(); await tick();
   const card = $('.pcard'); card.querySelector('.pKat').value = 'Kleider';
@@ -309,6 +319,23 @@ const tick = (n = 3) => new Promise(r => setTimeout(r, 15 * n));
   for (const c of $$('#pruefen .pcard:not(.pgruppe)').filter(c => /Kiosk Y/.test(c.textContent))) { $('.pKat', c).value = 'Lebensmittel'; $('.pOk', c).click(); await tick(10); }
   doc.querySelector('nav [data-v=uebersicht]').click(); await tick();
 
+  // Kontrolle: 3× Lebensmittel beim gleichen Händler, 1× Kleider → wird gemeldet
+  const coop = (key, kat) => [ser('2026-11-03'), 2026, 11, 'Ausgabe', 20, kat, 'Coop', 'Karte', 'COOP BERN ' + key.slice(-1), 'Import', 'ok', '', key];
+  S.Buchungen.push(coop('kc1', 'Lebensmittel'), coop('kc2', 'Lebensmittel'), coop('kc3', 'Lebensmittel'), coop('kc4', 'Kleider'));
+  await w.eval('load(D.jahr)'); await tick(4);
+  doc.querySelector('nav [data-v=pruefen]').click(); await tick();
+  let kc = $$('#pruefen .kcard');
+  check('Kontrolle: eine Abweichung gemeldet', kc.length === 1 && /Gebucht als Kleider/.test(kc[0].textContent) && /sonst 3× Lebensmittel/.test(kc[0].textContent));
+  $('.kOk', kc[0]).click(); await tick(8);
+  check('Kontrolle: «Passt so» setzt Tag, Meldung weg', S.Buchungen.find(r => r[12] === 'kc4')[11] === 'Kontrolle:ok' && !$$('#pruefen .kcard').some(c => !c.hidden));
+  S.Buchungen.push(coop('kc5', 'Kleider'));
+  await w.eval('load(D.jahr)'); await tick(4); w.eval('renderPruefen()');
+  kc = $$('#pruefen .kcard');
+  check('Kontrolle: neue Abweichung gemeldet, getaggte nicht', kc.length === 1 && /20\.00/.test(kc[0].textContent));
+  $('.kAendern', kc[0]).click(); await tick(8);
+  check('Kontrolle: «Ändern» schreibt die übliche Kategorie', S.Buchungen.find(r => r[12] === 'kc5')[5] === 'Lebensmittel');
+  doc.querySelector('nav [data-v=uebersicht]').click(); await tick();
+
   // Anmeldung erneuert sich beim nächsten Tipp (statt «Anmelden» zu suchen)
   const tokVorher = w.__tokAnfragen;
   $('main').dispatchEvent(new w.Event('pointerdown', { bubbles: true })); await tick();
@@ -335,4 +362,4 @@ const tick = (n = 3) => new Promise(r => setTimeout(r, 15 * n));
   const anzahl = (globalThis.__ok || 0);
   console.log(errors.length ? '\n' + errors.join('\n') : `\nALLES OK (${anzahl} Prüfungen)`);
   process.exit(errors.length ? 1 : 0);
-})().catch(e => { console.error('ABBRUCH', e); process.exit(1); });
+})().catch(e => { console.error(errors.join("\n")); console.error("ABBRUCH", e); process.exit(1); });

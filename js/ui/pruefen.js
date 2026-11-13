@@ -43,8 +43,8 @@ function renderPruefen() {
   const el = $('#pruefen');
   if (!D.offen.length) {
     el.innerHTML = `<div class="card empty"><b>Alles zugeordnet 🎉</b>
-      <span class="small muted">Neue Buchungen ohne passende Regel erscheinen nach dem Import hier.</span></div>`;
-    return;
+      <span class="small muted">Neue Buchungen ohne passende Regel erscheinen nach dem Import hier.</span></div>${kontrolleHtml()}`;
+    return bindKontrolle(el);
   }
   const vorschlag = zuordnungsGedaechtnis();
   // gleiche Händler zusammenfassen (Reihenfolge: grösste Gruppe zuerst, dann wie bisher)
@@ -89,12 +89,13 @@ function renderPruefen() {
           <button type="button" class="grow pOk">Speichern</button></div>
       </article>`;
     }).join('');
-  }).join('');
+  }).join('') + kontrolleHtml();
 
   $$('.pcard', el).forEach(card => {
     if (card.dataset.h !== undefined) return bindGruppe(card, gruppen.get(card.dataset.h), card.dataset.h);
     bindPcard(card, D.offen.find(b => String(b.row) === card.dataset.row));
   });
+  bindKontrolle(el);
 }
 
 function bindFelder(card) {
@@ -167,3 +168,74 @@ function entferneOffen(card, bs) {
   if (!D.offen.length) renderPruefen();
 }
 function suggestTerm(b) { return String(b.banktext || b.notiz).split(/[|;]/)[0].replace(/\s+/g, ' ').trim().slice(0, 40); }
+
+/* ---------- Kontrolle: Kategorie weicht von der üblichen beim gleichen Händler ab ---------- */
+// Ziel: verlässliche Summen pro Kategorie über viele Jahre. Gewollte Ausnahmen bleiben mit «Passt so» (Tag «Kontrolle:ok») ruhig.
+const KONTROLLE_OK = 'Kontrolle:ok';
+const KONTROLLE_MIN = 3, KONTROLLE_ANTEIL = 0.7;   // Rückblick 2024/25: 6 Meldungen bei 1241 Buchungen
+let KONTROLLE = [];
+const kTags = b => String(b.tags || '').split(',').map(t => t.trim()).filter(Boolean);
+
+function kontrolleListe() {
+  const ausnahme = k => /^Reise\s|^Kreditkarte \(ohne Details\)/.test(k);
+  const basis = (D.alle || D.buchungen).filter(b => b.banktext && b.status !== 'prüfen' && !ausnahme(b.kategorie));
+  const m = new Map();
+  basis.forEach(b => {
+    const h = haendler(b); if (!h || kTags(b).includes(KONTROLLE_OK)) return;   // bestätigte Ausnahmen verwässern die Regel nicht
+    const z = m.get(h) || new Map(), k = b.typ + '|' + b.kategorie;
+    z.set(k, (z.get(k) || 0) + 1); m.set(h, z);
+  });
+  const c = Daten.cache(), regeln = Logik.regelnAusZeilen((c && c.regelnRows) || []);
+  const liste = [];
+  basis.forEach(b => {
+    if (kTags(b).includes(KONTROLLE_OK)) return;
+    const z = m.get(haendler(b)); if (!z) return;
+    const total = [...z.values()].reduce((a, n) => a + n, 0);
+    const [dk, dn] = [...z.entries()].sort((a, x) => x[1] - a[1])[0];
+    const k = b.typ + '|' + b.kategorie;
+    if (k === dk || dn < KONTROLLE_MIN || dn / total < KONTROLLE_ANTEIL) return;
+    // trifft eine Regel genau diese Zuordnung (Betragsgrenze, Faktor), ist sie gewollt
+    const r = Logik.classify({ text: b.banktext, betrag: b.typ === 'Einnahme' ? b.betrag : -b.betrag, name: '', konto: '' }, regeln);
+    if (r.typ !== 'Ignorieren' && r.typ + '|' + r.kategorie === k) return;
+    const [typ, kategorie] = dk.split('|');
+    liste.push({ b, typ, kategorie, n: dn });
+  });
+  return liste.sort((a, x) => x.b.datum.localeCompare(a.b.datum));
+}
+
+function kontrolleHtml() {
+  KONTROLLE = kontrolleListe();
+  if (!KONTROLLE.length) return '';
+  const name = (typ, kat) => kat || typ;
+  return `<h2 class="section">Kontrolle · ${KONTROLLE.length} abweichende Kategorie${KONTROLLE.length === 1 ? '' : 'n'}</h2>
+    <p class="small muted" style="margin-top:0">Diese Buchungen sind anders zugeordnet als sonst beim gleichen Händler.
+      Stimmt es so, tippe «Passt so» – dann erscheint die Buchung hier nicht mehr.</p>
+    ${KONTROLLE.map((x, i) => `<article class="card stack kcard" data-i="${i}">
+      <div class="row" style="align-items:flex-start">
+        <div class="grow"><b>${esc(x.b.notiz || x.b.banktext)}</b><div class="small muted">${fmtDate(x.b.datum)} · ${esc(x.b.konto)}</div></div>
+        <div class="num amt">${chf(x.b.betrag)}</div></div>
+      <div class="small">Gebucht als <b>${esc(name(x.b.typ, x.b.kategorie))}</b> – sonst ${x.n}× <b>${esc(name(x.typ, x.kategorie))}</b></div>
+      <div class="row"><button type="button" class="ghost kOk">Passt so</button>
+        <button type="button" class="grow kAendern">Zu «${esc(name(x.typ, x.kategorie))}» ändern</button></div>
+    </article>`).join('')}`;
+}
+
+function bindKontrolle(el) {
+  $$('.kcard', el).forEach(card => {
+    const x = KONTROLLE[+card.dataset.i], b = x.b;
+    const busy = on => { card.classList.toggle('saving', on); $$('button', card).forEach(k => k.disabled = on); };
+    const fertig = meldung => { card.hidden = true; toast(meldung); load(D.jahr, { pruefen: true }); };
+    $('.kOk', card).onclick = async () => {
+      busy(true);
+      try { await call('tagsSetzen', [{ row: b.row, expect: expect(b), tags: kTags(b).concat(KONTROLLE_OK).join(', ') }]); }
+      catch (e) { busy(false); return fehler('Speichern', e); }
+      fertig('Bleibt so');
+    };
+    $('.kAendern', card).onclick = async () => {
+      busy(true);
+      try { await call('updateBuchung', b.row, { typ: x.typ, kategorie: x.kategorie }, null, expect(b)); }
+      catch (e) { busy(false); return fehler('Speichern', e); }
+      fertig(`Geändert zu «${x.kategorie || x.typ}»`);
+    };
+  });
+}

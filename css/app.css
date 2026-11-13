@@ -122,9 +122,9 @@ button.card.stat:hover { border-color:color-mix(in srgb, var(--accent) 40%, var(
 details > summary { cursor:pointer; color:var(--muted); font-size:14px; font-weight:600; padding:var(--s3) 0; }
 
 /* ---------- Prüfen ---------- */
-.pcard { margin-bottom:var(--s3); transition:opacity .2s; }
-.pcard .amt { font-size:18px; font-weight:650; }
-.pcard.saving { opacity:.45; pointer-events:none; }
+.pcard, .kcard { margin-bottom:var(--s3); transition:opacity .2s; }
+.pcard .amt, .kcard .amt { font-size:18px; font-weight:650; }
+.pcard.saving, .kcard.saving { opacity:.45; pointer-events:none; }
 .bank { font-size:13px; color:var(--muted); background:var(--surface-2); border-radius:var(--r-sm);
         padding:var(--s2) var(--s3); word-break:break-word; }
 
@@ -282,7 +282,6 @@ dialog form { padding:var(--s4) var(--s4) var(--s5); }
 @media (prefers-reduced-motion: reduce) { * { transition:none !important; animation:none !important; } }
 
 /* ---------- Monatsabschluss ---------- */
-.visually-hidden { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
 .abschluss { margin-top:var(--s3); }
 .abschluss h2 { margin:0; font-size:16px; font-weight:650; }
 .abschluss.fertig { padding-block:var(--s3); }
