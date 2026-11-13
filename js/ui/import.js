@@ -77,10 +77,11 @@ async function geteilteDateien() {
   const c = await caches.open('budget-geteilt'), dateien = [];
   for (const k of await c.keys()) {
     const r = await c.match(k);
-    if (r) dateien.push(new File([await r.blob()], decodeURIComponent(r.headers.get('X-Name') || 'geteilt.csv')));
+    const blob = r && await r.blob();
+    if (blob && blob.size) dateien.push(new File([blob], decodeURIComponent(r.headers.get('X-Name') || 'geteilt.csv')));
     await c.delete(k);
   }
-  if (!dateien.length) return toast('Keine Datei empfangen', { error:true });
+  if (!dateien.length) return toast('Die geteilte Datei kam leer an – bitte nochmals teilen oder unter «CSV-Dateien wählen» öffnen', { error:true });
   setView('import');
   await handleFiles(dateien);
   toast(`${dateien.length} Datei${dateien.length === 1 ? '' : 'en'} empfangen – zuerst Vorschau oder gleich importieren`);

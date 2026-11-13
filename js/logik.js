@@ -171,7 +171,9 @@ const Logik = (() => {
     else if (/Abschlussdatum;/.test(text)) parsed = parseUbsKonto(text, einst);
     else if (/^ID,Status,Richtung/m.test(text) || /CARD_TRANSACTION/.test(text)) parsed = parseWise(text, einst);
     else if (/^Budget-App Import/.test(text)) parsed = parseFertig(text);
-    else throw new Error('Unbekanntes Format: ' + datei);
+    else throw new Error('Unbekanntes Format: ' + datei + (text.trim()
+      ? ' – beginnt mit «' + text.trim().split(/\r?\n/)[0].slice(0, 30) + '…»'
+      : ' – die Datei ist leer'));
 
     const keys = new Set(vorhanden.map(b => b.key).filter(Boolean));
     const legacy = {};   // Buchungen ohne Schlüssel: Abgleich über Datum + Betrag (Mehrfachmenge)
