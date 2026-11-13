@@ -63,7 +63,8 @@ async function fakeFetch(url, opt = {}) {
 const dom = new JSDOM(html, { url: 'http://localhost:8080/', runScripts: 'dangerously', virtualConsole: vc, pretendToBeVisual: true,
   beforeParse(w) {
     const EchtDate = w.Date;
-    w.Date = class extends EchtDate { constructor(...a) { a.length ? super(...a) : super(JETZT); } static now() { return JETZT; } };
+    // feste Uhr, mit w.__vor (Millisekunden) vorspulbar
+    w.Date = class extends EchtDate { constructor(...a) { a.length ? super(...a) : super(JETZT + (w.__vor || 0)); } static now() { return JETZT + (w.__vor || 0); } };
     w.fetch = fakeFetch; w.TextEncoder = TextEncoder;
     w.URL.createObjectURL = () => 'blob:x'; w.URL.revokeObjectURL = () => {}; w.HTMLAnchorElement.prototype.click = function () { w.__download = this.download; };
     Object.defineProperty(w, 'crypto', { value: require('crypto').webcrypto, configurable: true });
@@ -72,7 +73,8 @@ const dom = new JSDOM(html, { url: 'http://localhost:8080/', runScripts: 'danger
     w.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
     w.HTMLDialogElement.prototype.close = function () { this.open = false; };
     Object.defineProperty(w.navigator, 'onLine', { get: () => netz });
-    w.google = { accounts: { oauth2: { initTokenClient: c => ({ requestAccessToken: () => setTimeout(() => c.callback({ access_token: 'tok123', expires_in: 3600 }), 0) }), revoke: () => {} } } };
+    w.__tokAnfragen = 0;
+    w.google = { accounts: { oauth2: { initTokenClient: c => ({ requestAccessToken: () => { w.__tokAnfragen++; setTimeout(() => c.callback({ access_token: 'tok123', expires_in: 3600 }), 0); } }), revoke: () => {} } } };
   } });
 const w = dom.window, doc = w.document, $ = s => doc.querySelector(s), $$ = s => [...doc.querySelectorAll(s)];
 const tick = (n = 3) => new Promise(r => setTimeout(r, 15 * n));
@@ -270,6 +272,26 @@ const tick = (n = 3) => new Promise(r => setTimeout(r, 15 * n));
   $('#tabs [data-a="vergleich"]').dispatchEvent(new w.KeyboardEvent('keydown', { key: 'End', bubbles: true })); await tick();
   check('Reiter: Ende → Steuern', /^Steuern/.test($('#title').textContent));
   w.eval("setAnsicht('budget')"); await tick();
+
+  // Anmeldung erneuert sich beim nächsten Tipp (statt «Anmelden» zu suchen)
+  const tokVorher = w.__tokAnfragen;
+  $('main').dispatchEvent(new w.Event('pointerdown', { bubbles: true })); await tick();
+  check('Anmeldung frisch: Tipp löst keine Erneuerung aus', w.__tokAnfragen === tokVorher);
+  w.__vor = 58 * 60000;   // 58 Minuten später: läuft in 2 Minuten ab
+  $('main').dispatchEvent(new w.Event('pointerdown', { bubbles: true })); await tick();
+  check('Kurz vor Ablauf: Tipp erneuert die Anmeldung', w.__tokAnfragen === tokVorher + 1 && w.eval('Daten.status().angemeldet'));
+  w.__vor = 125 * 60000;  // abgelaufen
+  check('Abgelaufen: Status zeigt nicht angemeldet', !w.eval('Daten.status().angemeldet'));
+  const ladenVorher = calls.filter(c => c.includes('batchGet')).length;
+  $('main').dispatchEvent(new w.Event('pointerdown', { bubbles: true })); await tick(6);
+  check('Abgelaufen: Tipp meldet an und lädt Daten neu', w.__tokAnfragen === tokVorher + 2 && w.eval('Daten.status().angemeldet')
+    && calls.filter(c => c.includes('batchGet')).length > ladenVorher);
+  w.__vor = 125 * 60000 + 20000;
+  const n2 = w.__tokAnfragen;
+  w.eval('Daten.abmelden()');
+  $('main').dispatchEvent(new w.Event('pointerdown', { bubbles: true })); await tick();
+  check('Höchstens ein Versuch pro Minute', w.__tokAnfragen === n2);
+  w.__vor = 200 * 60000; $('main').dispatchEvent(new w.Event('pointerdown', { bubbles: true })); await tick(6);
 
   // Neustart der App: lädt aus Gerätespeicher + Token
   check('Cache & Token gespeichert', !!w.localStorage.getItem('budget.cache') && !!w.localStorage.getItem('budget.token'));

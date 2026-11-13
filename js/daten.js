@@ -51,8 +51,8 @@ const Daten = (() => {
       })();
     });
   }
-  async function anmelden(interaktiv) {
-    if (angemeldet()) return tok.access;
+  async function anmelden(interaktiv, erzwingen) {
+    if (angemeldet() && !erzwingen) return tok.access;
     if (!navigator.onLine) throw new Error('Offline – Anmeldung nicht möglich');
     await gisBereit();
     if (!tokenClient) {
@@ -72,6 +72,21 @@ const Daten = (() => {
       tokenWaiters.push({ res, rej });
       if (tokenWaiters.length === 1) tokenClient.requestAccessToken({ prompt: interaktiv ? '' : 'none' });
     });
+  }
+
+  /**
+   * Bei einer Nutzeraktion (Tipp, Taste) aufrufen: erneuert die Google-Anmeldung, wenn sie abgelaufen ist
+   * oder in weniger als 5 Minuten abläuft. Browser zeigen das Google-Fenster nur während einer Nutzeraktion,
+   * darum geht das nicht im Hintergrund. Höchstens ein Versuch pro Minute.
+   * @returns Promise<boolean> true = neu angemeldet
+   */
+  let letzterVersuch = 0;
+  function auffrischen() {
+    if (!konfiguriert() || !navigator.onLine || !(window.google && google.accounts)) return Promise.resolve(false);
+    if (tok && tok.exp > Date.now() + 5 * 60000) return Promise.resolve(false);
+    if (Date.now() - letzterVersuch < 60000) return Promise.resolve(false);
+    letzterVersuch = Date.now();
+    return anmelden(true, true).then(() => true, () => false);
   }
 
   async function api(pfad, opt = {}, nochmal = true) {
@@ -366,7 +381,7 @@ const Daten = (() => {
   window.addEventListener('online', () => { sync().then(() => queue.length || laden()).catch(() => {}).finally(melde); });
   window.addEventListener('offline', melde);
 
-  return { konfiguriert, konfigurieren, config: () => Object.assign({}, cfg), anmelden, abmelden, angemeldet, status,
+  return { konfiguriert, konfigurieren, config: () => Object.assign({}, cfg), anmelden, auffrischen, abmelden, angemeldet, status,
     onStatus: f => { listeners.add(f); return () => listeners.delete(f); },
     cache, getDataSync, getData, search, addBuchung, updateBuchung, deleteBuchung, importCsv, kontostaendeErfassen, tagsSetzen, sync };
 })();

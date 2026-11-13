@@ -38,3 +38,14 @@ function renderStatus(s = Daten.status()) {
 $('#statusChip').onclick = () => { if (!Daten.status().angemeldet && navigator.onLine) login(); };
 Daten.onStatus(s => renderStatus(s));
 setInterval(() => renderStatus(), 30000);   // Anmeldung läuft nach einer Stunde ab
+
+// Der erste Tipp oder Tastendruck nach Ablauf (oder kurz davor) erneuert die Anmeldung von selbst –
+// kein gezieltes «Anmelden» mehr nötig. War sie schon abgelaufen, werden die Daten danach frisch geladen.
+async function beiNutzeraktion(e) {
+  if (document.body.classList.contains('gesperrt') || view === 'setup' || view === 'login') return;
+  if (e.target && e.target.closest && e.target.closest('#statusChip')) return;   // der Knopf meldet selbst an
+  const warAbgelaufen = !Daten.status().angemeldet;
+  if (await Daten.auffrischen()) { renderStatus(); if (warAbgelaufen) load(D ? D.jahr : null); }
+}
+document.addEventListener('pointerdown', beiNutzeraktion, true);
+document.addEventListener('keydown', beiNutzeraktion, true);
