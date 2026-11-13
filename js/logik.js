@@ -38,12 +38,18 @@ const Logik = (() => {
     const start = lines.findIndex(l => l.startsWith('Abschlussdatum;'));
     const data = parseCsv(lines.slice(start).join('\n'), ';');
     const h = data[0], ix = n => h.indexOf(n);
-    const rows = [];
+    const rows = [], hinweise = [];
     data.slice(1).forEach(r => {
       if (r.length < 10 || !r[ix('Abschlussdatum')]) return;
       const bel = parseNum(r[ix('Belastung')]), gut = parseNum(r[ix('Gutschrift')]);
       const betrag = gut ? gut : bel;   // Belastung ist negativ
       if (!betrag) return;
+      // vorgemerkt (noch ohne Buchungsdatum): UBS vergibt beim Verbuchen eine neue Transaktions-Nr. →
+      // jetzt weglassen, sonst entsteht beim nächsten Import ein Doppel. Kommt verbucht mit dem nächsten Auszug.
+      if (ix('Buchungsdatum') >= 0 && !r[ix('Buchungsdatum')]) {
+        hinweise.push('Noch nicht verbucht, kommt mit dem nächsten Import: ' + cleanName(r[ix('Beschreibung1')]) + ' (' + r[ix('Abschlussdatum')] + ', ' + betrag.toFixed(2) + ')');
+        return;
+      }
       const b1 = r[ix('Beschreibung1')] || '', b2 = r[ix('Beschreibung2')] || '', b3 = r[ix('Beschreibung3')] || '';
       rows.push({
         datum: r[ix('Abschlussdatum')], betrag, name: cleanName(b1), text: [b1, b2, b3].join(' | '),
@@ -54,7 +60,7 @@ const Logik = (() => {
     const kopf = n => { const l = lines.find(x => x.startsWith(n + ':')); return l ? l.split(';')[1] : ''; };
     const bis = String(kopf('Bis') || '').trim(), schluss = kopf('Schlusssaldo');
     const saldo = /^\d{4}-\d{2}-\d{2}$/.test(bis) && schluss !== '' ? { konto: kontoName, datum: bis, betrag: parseNum(schluss) } : null;
-    return { format: 'UBS ' + kontoName, rows, saldo };
+    return { format: 'UBS ' + kontoName, rows, saldo, hinweise };
   }
 
   function parseUbsKarte(text) {

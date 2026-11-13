@@ -138,7 +138,7 @@ const tick = (n = 3) => new Promise(r => setTimeout(r, 15 * n));
 
   // Import UBS-Konto (Vorschau + echt + Doppel)
   const csv = 'IBAN:;CH00 0000 0000 0000 0000 0;\n\nAbschlussdatum;Abschlusszeit;Buchungsdatum;Valutadatum;Währung;Belastung;Gutschrift;Einzelbetrag;Saldo;Transaktions-Nr.;Beschreibung1;Beschreibung2;Beschreibung3;Fussnoten;\n' +
-    `${dd};;;;CHF;-20.00;;;;TX1;Migros Bern;;;;\n${dd};;;;CHF;-99.00;;;;TX2;Ignoriermich;;;;\n${dd};;;;CHF;-33.00;;;;TX3;Unbekannt AG;;;;\n`;
+    `${dd};;${dd};;CHF;-20.00;;;;TX1;Migros Bern;;;;\n${dd};;${dd};;CHF;-99.00;;;;TX2;Ignoriermich;;;;\n${dd};;${dd};;CHF;-33.00;;;;TX3;Unbekannt AG;;;;\n`;
   let r = await w.eval("Daten").importCsv(csv, 'konto.csv', true);
   check('Import-Vorschau: 2 neu, 1 prüfen, 1 ignoriert, Lohnkonto', r.neu === 2 && r.offen === 1 && r.ignoriert === 1 && r.format === 'UBS Lohnkonto');
   const n0 = S.Buchungen.length; await w.eval("Daten").importCsv(csv, 'konto.csv', false);
@@ -216,7 +216,7 @@ const tick = (n = 3) => new Promise(r => setTimeout(r, 15 * n));
   // Kontostand aus CSV (Monatsende) → Blatt «Vermögen»
   const csvS = 'Kontonummer:;x;\nIBAN:;CH00 0000 0000 0000 0000 0;\nVon:;2026-10-01;\nBis:;2026-10-31;\nAnfangssaldo:;100;\nSchlusssaldo:;1234.56;\n\n' +
     'Abschlussdatum;Abschlusszeit;Buchungsdatum;Valutadatum;Währung;Belastung;Gutschrift;Einzelbetrag;Saldo;Transaktions-Nr.;Beschreibung1;Beschreibung2;Beschreibung3;Fussnoten;\n' +
-    '2026-10-20;;;;CHF;-5.00;;;;TXS1;Migros Bern;;;;\n';
+    '2026-10-20;;2026-10-20;;CHF;-5.00;;;;TXS1;Migros Bern;;;;\n';
   let rs = await w.eval("Daten").importCsv(csvS, 'okt.csv', true);
   check('Saldo-Vorschau: Lohnkonto per 31.10. erkannt', rs.saldo && rs.saldo.uebernehmen && rs.saldo.konto === 'Lohnkonto' && rs.saldo.betrag === 1234.56);
   const nV2 = S['Vermögen'].length;

@@ -16,7 +16,7 @@ const leer = { regeln: [], vorhanden: [], einst: {} };
 
 const ubsKonto = (iban, zeilen, bis = '2026-10-31') => `﻿Kontonummer:;0000;\nIBAN:;${iban};\nVon:;2026-10-01;\nBis:;${bis};\nAnfangssaldo:;100;\nSchlusssaldo:;1'234.50;\n\n` +
   'Abschlussdatum;Abschlusszeit;Buchungsdatum;Valutadatum;Währung;Belastung;Gutschrift;Einzelbetrag;Saldo;Transaktions-Nr.;Beschreibung1;Beschreibung2;Beschreibung3;Fussnoten;\n' +
-  zeilen.map(z => `${z[0]};;;;CHF;${z[1]};${z[2]};;;${z[3]};${z[4]};${z[5] || ''};;;`).join('\n') + '\n';
+  zeilen.map(z => `${z[0]};;${z[6] === 'vorgemerkt' ? '' : z[0]};;CHF;${z[1]};${z[2]};;;${z[3]};${z[4]};${z[5] || ''};;;`).join('\n') + '\n';
 
 test('UBS-Konto: Lohnkonto, Regeln, Faktor, Betragsgrenze, Ignorieren, unbekannt', () => {
   const t = ubsKonto('CH00 0000 0000', [
@@ -48,6 +48,13 @@ test('Doppel: gleicher Schlüssel und alte Buchungen ohne Schlüssel (Datum + Be
   const vorhanden = [{ key: 'UBS|A1|-10.00', datum: '2026-10-05', betrag: 10 }, { key: '', datum: '2026-10-06', betrag: 20 }];
   const r = L.auswerten(t, 'k.csv', { ...leer, vorhanden });
   assert.strictEqual(r.doppelt, 2); assert.strictEqual(r.neu.length, 1); assert.strictEqual(r.neu[0].key, 'UBS|A3|-30.00');
+});
+
+test('UBS-Konto: vorgemerkte Zahlung (ohne Buchungsdatum) wird weggelassen und gemeldet', () => {
+  const t = ubsKonto('CH00', [['2026-11-09', '-19.50', '', '9999X', 'Restaurant AG', '', 'vorgemerkt'], ['2026-11-09', '-5.00', '', 'B1', 'Kiosk']]);
+  const r = L.auswerten(t, 'v.csv', leer);
+  assert.strictEqual(r.total, 1); assert.strictEqual(r.neu[0].key, 'UBS|B1|-5.00');
+  assert.ok(/Noch nicht verbucht.*Restaurant AG.*19\.50/.test(r.hinweise[0]));
 });
 
 const karte = zeilen => 'sep=;\nKontonummer;Kartennummer;Konto-/Karteninhaber;Einkaufsdatum;Buchungstext;Branche;Betrag;Originalwährung;Kurs;Währung;Belastung;Gutschrift;Buchung\n' +
