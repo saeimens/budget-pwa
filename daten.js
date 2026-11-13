@@ -255,8 +255,15 @@ const Daten = (() => {
       rows: liste.map(x => ({ values: [datum, x.konto, x.gruppe, Math.round(Number(x.saldo) * 100) / 100, x.bemerkung || ''].map(zelle) })) } }]);
   }
 
+  /** Tags mehrerer Buchungen in einem Schritt setzen: [{ row, expect, tags }] */
+  async function onlineTags(liste) {
+    const data = [];
+    for (const x of liste) data.push({ range: 'Buchungen!L' + await zeileFinden(x.row, x.expect), values: [[x.tags]] });
+    if (data.length) await api('/values:batchUpdate', { method: 'POST', body: { valueInputOption: 'RAW', data } });
+  }
+
   /* ---------------- Offline-Warteschlange ---------------- */
-  const OPS = { add: onlineAdd, update: onlineUpdate, delete: onlineDelete, vermoegen: onlineKontostaende };
+  const OPS = { add: onlineAdd, update: onlineUpdate, delete: onlineDelete, vermoegen: onlineKontostaende, tags: onlineTags };
   let syncLaeuft = null;
   function sync() {
     if (syncLaeuft) return syncLaeuft;
@@ -308,6 +315,16 @@ const Daten = (() => {
     });
   }
 
+  function tagsSetzen(liste) {
+    if (!liste.length) return Promise.resolve(true);
+    return schreiben('tags', [liste], d => {
+      liste.forEach(x => {
+        const b = d.buchungen.find(y => x.expect.key ? y.key === x.expect.key : y.datum === x.expect.datum && y.betrag === x.expect.betrag && y.banktext === x.expect.banktext);
+        if (b) b.tags = x.tags;
+      });
+    });
+  }
+
   function kontostaendeErfassen(datum, liste) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(datum) || !liste.length) return Promise.reject(new Error('Stichtag und mindestens ein Konto nötig.'));
     return schreiben('vermoegen', [datum, liste], d => {
@@ -351,6 +368,6 @@ const Daten = (() => {
 
   return { konfiguriert, konfigurieren, config: () => Object.assign({}, cfg), anmelden, abmelden, angemeldet, status,
     onStatus: f => { listeners.add(f); return () => listeners.delete(f); },
-    cache, getDataSync, getData, search, addBuchung, updateBuchung, deleteBuchung, importCsv, kontostaendeErfassen, sync };
+    cache, getDataSync, getData, search, addBuchung, updateBuchung, deleteBuchung, importCsv, kontostaendeErfassen, tagsSetzen, sync };
 })();
 if (typeof module !== 'undefined') module.exports = Daten;

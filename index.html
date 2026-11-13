@@ -191,8 +191,19 @@
   .seg2 { display:inline-flex; gap:2px; padding:3px; border-radius:99px; background:var(--surface-2); }
   .seg2 button { min-height:36px; padding:6px 14px; border-radius:99px; background:none; color:var(--muted); font-size:14px; font-weight:600; }
   .seg2 button.on { background:var(--surface); color:var(--ink); box-shadow:var(--shadow); }
-  .tabs { display:flex; width:100%; margin-bottom:var(--s3); }
-  .tabs button { flex:1; min-height:40px; padding:6px 4px; }
+  .tabs { display:flex; width:100%; margin-bottom:var(--s3); overflow-x:auto; scrollbar-width:none; }
+  .tabs::-webkit-scrollbar { display:none; }
+  .tabs.mehr { -webkit-mask-image:linear-gradient(to right, #000 80%, transparent); mask-image:linear-gradient(to right, #000 80%, transparent); }
+  .tabs button { flex:1 0 auto; min-height:40px; padding:6px 12px; }
+
+  /* ---------- Steuern ---------- */
+  .chips { display:flex; flex-wrap:wrap; gap:var(--s2); }
+  .chips button { min-height:40px; padding:6px 12px; border-radius:99px; font-weight:500; font-size:14px;
+                  background:var(--surface); color:var(--ink); border:1px solid var(--line); }
+  .chips button[aria-pressed="true"] { background:var(--accent-soft); color:var(--accent); border-color:var(--accent); font-weight:600; }
+  .vschlag { padding:var(--s3) 0; } .vschlag + .vschlag { border-top:1px solid var(--line); }
+  .vschlag .knoepfe { display:flex; flex-wrap:wrap; gap:var(--s2); margin-top:var(--s2); }
+  .vschlag .knoepfe button { min-height:40px; padding:6px 12px; font-size:14px; }
   .delta { display:inline-flex; align-items:center; gap:3px; font-size:13px; font-weight:600; white-space:nowrap; }
   .delta.gut { color:var(--accent); } .delta.schlecht { color:var(--bad); } .delta.neutral { color:var(--muted); }
   .vorjahr { font-size:13px; color:var(--muted); display:flex; flex-wrap:wrap; gap:var(--s1) var(--s2); align-items:center; }
@@ -333,6 +344,7 @@
       <button type="button" role="tab" data-a="vergleich">Vergleich</button>
       <button type="button" role="tab" data-a="rechnungen">Rechnungen</button>
       <button type="button" role="tab" data-a="vermoegen">Vermögen</button>
+      <button type="button" role="tab" data-a="steuern">Steuern</button>
     </div>
     <div class="seg" id="monate" role="group" aria-label="Zeitraum"></div>
     <div id="uebersicht"><div class="loading">Lade Daten …</div></div>
@@ -418,6 +430,8 @@
     </div>
     <label class="field"><span id="edKatLabel">Kategorie</span><select id="edKat"></select></label>
     <label class="field"><span>Notiz</span><input type="text" id="edNotiz"></label>
+    <div class="field"><span id="edTagsLabel">Steuern (für die Steuererklärung markieren)</span>
+      <div class="chips" id="edTags" role="group" aria-labelledby="edTagsLabel"></div></div>
     <div class="row">
       <button type="button" class="ghost danger" id="edDel">Löschen</button>
       <button type="submit" class="grow" id="edSave">Speichern</button>
@@ -585,7 +599,7 @@ $$('nav button').forEach(b => b.onclick = () => setView(b.dataset.v));
 
 function renderTitle() {
   let t = VIEW_TITEL[view];
-  if (!t) t = !D ? 'Budget' : ansicht === 'vergleich' ? 'Jahresvergleich' : ansicht === 'rechnungen' ? `Jahresrechnungen ${D.jahr}` : ansicht === 'vermoegen' ? 'Vermögen' : monat === 0 ? `Jahr ${D.jahr}` : `${MONATE_LANG[monat - 1]} ${D.jahr}`;
+  if (!t) t = !D ? 'Budget' : ansicht === 'vergleich' ? 'Jahresvergleich' : ansicht === 'rechnungen' ? `Jahresrechnungen ${D.jahr}` : ansicht === 'vermoegen' ? 'Vermögen' : ansicht === 'steuern' ? `Steuern ${D.jahr}` : monat === 0 ? `Jahr ${D.jahr}` : `${MONATE_LANG[monat - 1]} ${D.jahr}`;
   $('#title').textContent = t;
   document.title = t === 'Budget' ? 'Budget' : `${t} · Budget`;
 }
@@ -650,8 +664,12 @@ function setAnsicht(a) {
 }
 function renderTabs() {
   $$('#tabs [data-a]').forEach(b => { const on = b.dataset.a === ansicht; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+  const on = $('#tabs .on'); if (on) on.scrollIntoView({ inline:'nearest', block:'nearest' });
+  const t = $('#tabs'); t.classList.toggle('mehr', t.scrollWidth > t.clientWidth + 2 && t.scrollLeft + t.clientWidth < t.scrollWidth - 2);
 }
+$('#tabs').addEventListener('scroll', () => { const t = $('#tabs'); t.classList.toggle('mehr', t.scrollLeft + t.clientWidth < t.scrollWidth - 2); });
 function jahrSichtbar() { $('#jahr').hidden = view !== 'uebersicht' || ansicht === 'vergleich' || ansicht === 'vermoegen'; }
+let offenSt = null;   // aufgeklappte Steuer-Kategorie
 $$('#tabs [data-a]').forEach(b => b.onclick = () => setAnsicht(b.dataset.a));
 let offenR = null;   // aufgeklappter Posten bei den Jahresrechnungen
 
@@ -659,6 +677,7 @@ function renderUebersicht() {
   if (ansicht === 'vergleich') return renderVergleich();
   if (ansicht === 'rechnungen') return renderRueck();
   if (ansicht === 'vermoegen') return renderVermoegen();
+  if (ansicht === 'steuern') return renderSteuern();
   const imZ = D.buchungen.filter(b => monat === 0 || b.monat === monat);
   const nachTyp = t => imZ.filter(b => b.typ === t);
   AUS = nachTyp('Ausgabe');
@@ -778,6 +797,7 @@ function openEdit(b) {
   $('#edKat').innerHTML = katOpts(b.kategorie);
   $('#edBetrag').value = b.betrag.toFixed(2);
   $('#edNotiz').value = b.notiz;
+  renderTagChips($('#edTags'), steuerVon(b));
   katLabel(b.typ, $('#edKatLabel'));
   $$('#editForm button').forEach(x => x.disabled = false);
   $('#edit').showModal();
@@ -792,7 +812,8 @@ $('#editForm').onsubmit = async e => {
   const betrag = parseBetrag($('#edBetrag').value);
   if (!betrag) { markInvalid($('#edBetrag')); return toast('Bitte einen gültigen Betrag eingeben'); }
   if (typ === 'Ausgabe' && !kategorie) { markInvalid($('#edKat')); return toast('Bitte eine Kategorie wählen'); }
-  const changes = { typ, kategorie, notiz: $('#edNotiz').value.trim(), status:'ok' };
+  const changes = { typ, kategorie, notiz: $('#edNotiz').value.trim(), status:'ok',
+    tags: mitSteuer(b.tags, $$('#edTags [aria-pressed="true"]').map(x => x.dataset.t)) };
   if (Math.abs(betrag - b.betrag) >= 0.005) changes.betrag = betrag;
   $$('#editForm button').forEach(x => x.disabled = true);
   try { await call('updateBuchung', b.row, changes, null, expect(b)); }
@@ -1090,6 +1111,124 @@ function renderRueck() {
 
   $$('#uebersicht [data-r]').forEach(b => b.onclick = () => { offenR = offenR === b.dataset.r ? null : b.dataset.r; renderRueck(); });
   bindTx($('#uebersicht'));
+}
+
+/* ---------- Steuern ---------- */
+// Markierung in der Spalte «Tags» der Buchung: «Steuer:Weiterbildung», mehrere mit Komma; «Steuer:keine» = Vorschlag verworfen
+const STEUER = [
+  { t: 'Berufskosten', h: 'Arbeitsmaterial, Fachliteratur, Berufsverbände' },
+  { t: 'Weiterbildung', h: 'Berufsorientierte Kurse und Ausbildungen' },
+  { t: 'Krankheitskosten', h: 'Arzt, Therapie, Brille, Selbstbehalt – nicht von der Krankenkasse bezahlt' },
+  { t: 'Behinderungsbedingt', h: 'Kosten, die wegen einer Behinderung anfallen' },
+  { t: 'Spende', h: 'An gemeinnützige Organisationen' },
+  { t: 'Fahrkosten', h: 'Arbeitsweg' },
+  { t: 'Nebenerwerb', h: 'Kosten für Nebenerwerb' }
+];
+const tagListe = s => String(s || '').split(',').map(x => x.trim()).filter(Boolean);
+const steuerVon = b => tagListe(b.tags).filter(t => t.startsWith('Steuer:')).map(t => t.slice(7));
+const mitSteuer = (alt, neu) => tagListe(alt).filter(t => !t.startsWith('Steuer:')).concat(neu.map(t => 'Steuer:' + t)).join(', ');
+
+function renderTagChips(el, aktiv) {
+  el.innerHTML = STEUER.map(x => `<button type="button" data-t="${x.t}" aria-pressed="${aktiv.includes(x.t)}" title="${esc(x.h)}">${x.t}</button>`).join('');
+  $$('button', el).forEach(b => b.onclick = () => b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') !== 'true'));
+}
+
+/**
+ * Vorschlag für unmarkierte Buchungen (nur Hinweis – entscheidet die Person).
+ * Im Code stehen nur allgemeine Begriffe. Persönliche Stichwörter (Ärztinnen, Schulen, Vereine …) gehören ins Sheet:
+ * Blatt «Einstellungen», Zeilen «Steuer-Stichwörter <Abzugsart>», Wert = Stichwörter mit Komma getrennt.
+ */
+const STEUER_ALLGEMEIN = {
+  Weiterbildung: /weiterbildung|studiengeb/,
+  Berufskosten: /berufsverband|fachliteratur/,
+  Spende: /spende/,
+  Krankheitskosten: /arzt|apotheke|\bbrille|physiotherap|zahnarzt/
+};
+function steuerStichwoerter() {
+  const e = (Daten.cache() || {}).einst || {}, o = {};
+  STEUER.forEach(x => o[x.t] = String(e['Steuer-Stichwörter ' + x.t] || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean));
+  return o;
+}
+function steuerVorschlag(b, eigene = steuerStichwoerter()) {
+  if (b.typ === 'Einnahme' || b.typ === 'Sparen' || b.betrag <= 0) return null;
+  const txt = (b.notiz + ' ' + b.banktext + ' ' + b.kategorie).toLowerCase();
+  for (const x of STEUER) if ((eigene[x.t] || []).some(w => txt.includes(w))) return x.t;   // eigene zuerst
+  if (b.kategorie === 'Selbstbehalt') return 'Krankheitskosten';
+  for (const [t, re] of Object.entries(STEUER_ALLGEMEIN)) if (re.test(txt)) return t;
+  return null;
+}
+
+async function steuerSetzen(liste, meldung) {
+  // sofort anzeigen, dann ins Sheet schreiben
+  liste.forEach(x => x.b.tags = x.tags);
+  renderSteuern();
+  try { await call('tagsSetzen', liste.map(x => ({ row: x.b.row, expect: expect(x.b), tags: x.tags }))); toast(meldung); }
+  catch (e) { fehler('Speichern', e); }
+  load(D.jahr);
+}
+
+function renderSteuern() {
+  const jahr = D.jahr, liste = D.buchungen;
+  const markiert = liste.filter(b => steuerVon(b).some(t => t !== 'keine'));
+  const proTag = STEUER.map(x => ({ ...x, b: markiert.filter(b => steuerVon(b).includes(x.t)) }))
+    .map(x => ({ ...x, summe: x.b.reduce((s, b) => s + b.betrag, 0) })).filter(x => x.b.length);
+  const total = markiert.reduce((s, b) => s + b.betrag, 0);
+  const s3a = liste.filter(b => b.typ === 'Sparen' && /3\. säule|3a/i.test(b.kategorie)).reduce((s, b) => s + b.betrag, 0);
+  const eigene = steuerStichwoerter();
+  const vorschlaege = liste.filter(b => !steuerVon(b).length).map(b => ({ b, t: steuerVorschlag(b, eigene) })).filter(x => x.t)
+    .sort((a, b) => a.t.localeCompare(b.t) || b.b.datum.localeCompare(a.b.datum));
+
+  const hero = `<div class="card hero"><div class="label">Markiert für die Steuererklärung ${jahr}</div>
+      <div class="value num">${chf0(total)} <span class="cur">CHF</span></div>
+      <div class="small muted">${markiert.length} Buchung${markiert.length === 1 ? '' : 'en'}${s3a ? ` · dazu 3a-Einzahlungen ${chf0(s3a)} CHF (automatisch erkannt)` : ''}</div>
+      ${markiert.length ? `<button type="button" class="ghost" id="stExport" style="width:100%;margin-top:var(--s3)">Als CSV exportieren</button>` : ''}</div>`;
+
+  const gruppen = proTag.length ? `<h2 class="section">Nach Abzugsart · antippen für Buchungen</h2>
+    <div class="card" style="padding-block:var(--s1)">${proTag.map(x => {
+      const offen = offenSt === x.t;
+      return `<div class="cat-wrap"><button type="button" class="plain cat" data-st="${x.t}" aria-expanded="${offen}">
+          <span class="row"><span class="grow name">${x.t}</span><span class="num">${chf(x.summe)}</span>${ico('chev', 'chev', 18)}</span>
+          <span class="small muted" style="display:block;margin-top:2px">${x.b.length} Buchung${x.b.length === 1 ? '' : 'en'} · ${esc(x.h)}</span></button>
+        ${offen ? `<div class="cat-detail">${txList(x.b.slice().sort((a, b) => b.datum.localeCompare(a.datum)))}</div>` : ''}</div>`; }).join('')}</div>`
+    : vorschlaege.length ? '' : `<div class="card empty" style="margin-top:var(--s3)"><b>Noch nichts markiert</b>
+        <span class="small muted">Markiere eine Buchung im Bearbeiten-Fenster unter «Steuern».</span></div>`;
+
+  const vor = vorschlaege.length ? `<h2 class="section row" style="align-items:center"><span class="grow">Vorschläge (${vorschlaege.length})</span>
+      <button type="button" class="ghost" id="stAlle" style="min-height:36px;padding:4px 12px;font-size:14px">Alle übernehmen</button></h2>
+    <div class="card" style="padding-block:var(--s1)">${vorschlaege.map((x, i) => `<div class="vschlag">
+        <button type="button" class="plain row" style="display:flex;cursor:pointer" data-vi="${i}" data-act="anders" aria-label="${esc(x.b.notiz || x.b.kategorie)} öffnen, andere Art wählen">
+          <span class="grow"><span style="font-weight:500;display:block">${esc(x.b.notiz || x.b.kategorie)}</span>
+          <span class="small muted">${fmtDate(x.b.datum)} · ${esc(x.b.kategorie)}</span></span><span class="num">${chf(x.b.betrag)}</span></button>
+        <div class="knoepfe"><button type="button" data-vi="${i}" data-act="ja">✓ ${x.t}</button>
+          <button type="button" class="ghost" data-vi="${i}" data-act="nein">Nicht relevant</button></div></div>`).join('')}</div>
+    <div class="small muted" style="margin-top:var(--s2)">Buchung antippen, um eine andere Abzugsart zu wählen.</div>` : '';
+
+  const hinweis = `<div class="hinweis">Die App sammelt nur – was abziehbar ist, regelt die Wegleitung zur Steuererklärung.
+    Krankheitskosten sind meist nur abziehbar, soweit sie 5 % des Nettoeinkommens übersteigen; behinderungsbedingte Kosten in der Regel ohne diesen Selbstbehalt.</div>`;
+
+  $('#uebersicht').innerHTML = `<div style="margin-top:var(--s1)">${hero}</div>` + gruppen + vor + hinweis;
+
+  $$('#uebersicht [data-st]').forEach(b => b.onclick = () => { offenSt = offenSt === b.dataset.st ? null : b.dataset.st; renderSteuern(); });
+  bindTx($('#uebersicht'));
+  $$('#uebersicht [data-vi]').forEach(btn => btn.onclick = () => {
+    const x = vorschlaege[+btn.dataset.vi];
+    if (btn.dataset.act === 'anders') return openEdit(x.b);
+    const neu = btn.dataset.act === 'ja' ? [x.t] : ['keine'];
+    steuerSetzen([{ b: x.b, tags: mitSteuer(x.b.tags, neu) }], btn.dataset.act === 'ja' ? `Als ${x.t} markiert` : 'Vorschlag ausgeblendet');
+  });
+  if ($('#stAlle')) $('#stAlle').onclick = () =>
+    steuerSetzen(vorschlaege.map(x => ({ b: x.b, tags: mitSteuer(x.b.tags, [x.t]) })), `${vorschlaege.length} Buchungen markiert`);
+  if ($('#stExport')) $('#stExport').onclick = () => {
+    const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+    const zeilen = [['Datum', 'Abzugsart', 'Betrag CHF', 'Beschreibung', 'Kategorie', 'Konto']].concat(
+      markiert.slice().sort((a, b) => a.datum.localeCompare(b.datum)).flatMap(b => steuerVon(b).filter(t => t !== 'keine')
+        .map(t => [fmtDate(b.datum), t, b.betrag.toFixed(2), b.notiz, b.kategorie, b.konto])));
+    if (s3a) zeilen.push(['', '3a-Einzahlungen (Total)', s3a.toFixed(2), 'automatisch erkannt', '', '']);
+    const blob = new Blob(['﻿' + zeilen.map(r => r.map(q).join(';')).join('\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Steuern ${jahr}.csv`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    toast(`Steuern ${jahr}.csv gespeichert`);
+  };
 }
 
 /* ---------- Vermögen ---------- */
