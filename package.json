@@ -1,0 +1,12 @@
+{
+  "name": "budget-pwa",
+  "private": true,
+  "description": "Persönliche Budget-App (PWA), Daten im eigenen Google Sheet",
+  "scripts": {
+    "test": "node tests/logik.test.js && node tests/app.test.js && node tests/a11y.test.js"
+  },
+  "devDependencies": {
+    "axe-core": "4.10.2",
+    "jsdom": "24.1.3"
+  }
+}
