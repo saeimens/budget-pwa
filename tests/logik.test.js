@@ -94,6 +94,7 @@ test('Budget-App-Import: übernimmt Typ/Kategorie, prüft Pflichtfelder', () => 
 test('Unbekanntes Format wird abgelehnt', () => {
   assert.throws(() => L.auswerten('a,b,c\n1,2,3\n', 'x.csv', leer), /Unbekanntes Format: x\.csv – beginnt mit «a,b,c…»/);
   assert.throws(() => L.auswerten('', 'x.csv', leer), /die Datei ist leer/);
+  assert.throws(() => L.auswerten('ï»¿Kontonummer:,0000,\nIBAN:,CH00,\n', 'y.csv', leer), /Google Sheets.*Original-Datei/);
 });
 
 test('CSV-Parser: Anführungszeichen, Semikolon im Feld, Zeilenumbruch im Feld', () => {

@@ -171,6 +171,11 @@ const Logik = (() => {
     else if (/Abschlussdatum;/.test(text)) parsed = parseUbsKonto(text, einst);
     else if (/^ID,Status,Richtung/m.test(text) || /CARD_TRANSACTION/.test(text)) parsed = parseWise(text, einst);
     else if (/^Budget-App Import/.test(text)) parsed = parseFertig(text);
+    // UBS-Auszug, den eine Tabellen-App (z. B. Google Sheets) neu gespeichert hat: Komma statt Semikolon,
+    // Umlaute und Zahlen oft verändert → Regeln und Schlüssel wären unzuverlässig, darum ablehnen und erklären
+    else if (/(Kontonummer:|Abschlussdatum|Kartennummer|Einkaufsdatum),/.test(text)) throw new Error(datei + ': Diese Datei wurde von einer ' +
+      'Tabellen-App (z. B. Google Sheets) neu gespeichert und ist dabei verändert worden. Bitte die Original-Datei aus «Downloads» ' +
+      'nehmen: hier auf «CSV-Dateien wählen» tippen, oder in «Dateien» lange drücken → Teilen → Budget.');
     else throw new Error('Unbekanntes Format: ' + datei + (text.trim()
       ? ' – beginnt mit «' + text.trim().split(/\r?\n/)[0].slice(0, 30) + '…»'
       : ' – die Datei ist leer'));
