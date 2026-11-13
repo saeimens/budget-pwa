@@ -50,7 +50,7 @@ function renderUebersicht() {
   AUS = nachTyp('Ausgabe');
   const ein = nachTyp('Einnahme'), rue = nachTyp('Rückstellung'), spa = nachTyp('Sparen');
   const sAus = sum(AUS), sEin = sum(ein), sRue = sum(rue), sSpa = sum(spa);
-  const saldo = sEin - sAus - sRue - sSpa;
+  const saldo = sEin - sAus - sRue;   // Sparen ist Vermögen, kein Verbrauch – steht separat
   const anzMonate = monat === 0 ? Math.max(1, ...D.buchungen.map(b => b.monat)) : 1;
   const budget = D.kategorien.reduce((a, k) => a + k.budget, 0) * anzMonate;
   const rest = budget - sAus;
@@ -83,7 +83,7 @@ function renderUebersicht() {
       <span class="label" style="display:flex;justify-content:space-between">Jahresrechnungen ${ico('chev', 'chev', 16)}</span>
       <span class="value num" style="display:block">${chf0(sRue)}</span></button>
     ${stat('Gespart', chf0(sSpa))}
-    ${stat('Saldo <span class="small">(Einnahmen − Rest)</span>', chf0(saldo), saldo < 0 ? 'neg' : 'pos')}</div>`;
+    ${stat('Saldo <span class="small">(ohne Sparen)</span>', chf0(saldo), saldo < 0 ? 'neg' : 'pos')}</div>`;
 
   // Monatsverlauf (nur Jahresansicht)
   let chart = '';
@@ -104,7 +104,7 @@ function renderUebersicht() {
     .filter(k => k.ist !== 0 || k.budget > 0)
     .sort((a, b) => b.ist - a.ist);
 
-  $('#uebersicht').innerHTML = `${hero}${stats}${chart}
+  $('#uebersicht').innerHTML = `${abschlussKarte()}${hero}${stats}${chart}
     <h2 class="section">Kategorien <span style="font-weight:400">· antippen für Details</span></h2>
     <div class="card" style="padding-block:var(--s1)" id="kats"></div>
     ${rue.length ? `<h2 class="section">Jahresrechnungen</h2><div class="card" style="padding-block:var(--s1)">${txList(rue)}</div>` : ''}
@@ -112,6 +112,7 @@ function renderUebersicht() {
        <div class="card" style="padding-block:var(--s1)">${txList(ein)}</div></details>` : ''}`;
   renderKats();
   bindTx($('#uebersicht'));
+  bindAbschluss($('#uebersicht'));
   $('#zuRueck').onclick = () => setAnsicht('rechnungen');
   $$('.chart .c').forEach(el => el.onclick = () => waehleMonat(+el.dataset.m));
 }

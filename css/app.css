@@ -280,3 +280,16 @@ dialog form { padding:var(--s4) var(--s4) var(--s5); }
 .icon-btn { background:none; color:var(--muted); min-height:44px; min-width:44px; padding:0; display:grid; place-items:center; }
 
 @media (prefers-reduced-motion: reduce) { * { transition:none !important; animation:none !important; } }
+
+/* ---------- Monatsabschluss ---------- */
+.visually-hidden { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+.abschluss { margin-top:var(--s3); }
+.abschluss h2 { margin:0; font-size:16px; font-weight:650; }
+.abschluss.fertig { padding-block:var(--s3); }
+.ab-liste { list-style:none; margin:var(--s3) 0 0; padding:0; }
+.ab-liste li { padding:var(--s2) 0; border-top:1px solid var(--line); }
+.ab-liste li.ok .ab-t { color:var(--muted); }
+.ab-ico { flex:0 0 auto; width:24px; height:24px; border-radius:50%; border:2px solid var(--line); display:grid; place-items:center; }
+.ab-ico.ok { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+.ab-ico.opt { border-style:dashed; }
+button.klein { min-height:40px; padding:6px 12px; font-size:14px; }

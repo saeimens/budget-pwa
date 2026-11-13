@@ -34,7 +34,7 @@ function renderVergleich() {
   const A = auswahl(vgl.a), B = auswahl(vgl.b);
   const summe = (l, t) => l.filter(b => b.typ === t).reduce((x, b) => x + b.betrag, 0);
   const kz = l => { const o = { aus: summe(l, 'Ausgabe'), ein: summe(l, 'Einnahme'), rue: summe(l, 'Rückstellung'), spa: summe(l, 'Sparen') };
-    o.saldo = o.ein - o.aus - o.rue - o.spa; return o; };
+    o.saldo = o.ein - o.aus - o.rue; return o; };
   const ka = kz(A), kb = kz(B);
   const zeitraum = bis ? ` · 1.1. bis ${HEUTE.getDate()}.${CUR_M}.` : '';
   const opts = sel => jahre.map(j => `<option ${j === sel ? 'selected' : ''}>${j}</option>`).join('');
@@ -55,7 +55,7 @@ function renderVergleich() {
   const stat = (label, a, b, hochGut) => `<div class="card stat"><div class="label">${label}</div>
       <div class="value num">${chf0(b)}</div><div class="vorjahr"><span>${vgl.a}: ${chf0(a)}</span>${deltaHtml(a, b, hochGut)}</div></div>`;
   const stats = `<div class="stats">${stat('Einnahmen', ka.ein, kb.ein, true)}${stat('Jahresrechnungen', ka.rue, kb.rue, false)}
-      ${stat('Gespart', ka.spa, kb.spa, true)}${stat('Saldo', ka.saldo, kb.saldo, true)}</div>`;
+      ${stat('Gespart', ka.spa, kb.spa, true)}${stat('Saldo (ohne Sparen)', ka.saldo, kb.saldo, true)}</div>`;
 
   // Monatsvergleich (gruppierte Säulen, eine Achse)
   const nM = bis ? CUR_M : 12;

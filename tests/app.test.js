@@ -90,6 +90,20 @@ const tick = (n = 3) => new Promise(r => setTimeout(r, 15 * n));
   check('Hero & Kategorien', $('.hero .value') && doc.querySelectorAll('.cat').length >= 2);
   check('Badge 1 offen', $('#badge').textContent === '1');
 
+  // Monatsabschluss (heute 12.11. → Oktober): Lohnkonto/Kontostände da, Kreditkarte fehlt, offene Buchung ist vom November
+  const ab = $('.abschluss');
+  check('Abschluss: Karte für Oktober, 3 von 4', ab && /Monatsabschluss Oktober/.test(ab.textContent) && /3 von 4 erledigt/.test(ab.textContent));
+  const abLi = [...ab.querySelectorAll('li')];
+  check('Abschluss: Kreditkarte offen mit Knopf, Lohnkonto erledigt', /Kreditkarte/.test(abLi[1].textContent) && !abLi[1].classList.contains('ok')
+    && abLi[1].querySelector('[data-ab=import]') && abLi[0].classList.contains('ok') && /erledigt/.test(abLi[0].textContent));
+  check('Abschluss: Wise freiwillig ohne Knopf', /freiwillig/.test(abLi[2].textContent) && !abLi[2].querySelector('button'));
+  check('Saldo ohne Sparen beschriftet', /ohne Sparen/.test($('#uebersicht .stats').textContent));
+  w.eval("D.alle.push({ datum: '2026-10-29', konto: 'Kreditkarte', betrag: 9, typ: 'Ausgabe', status: 'ok' })");
+  check('Abschluss: mit Kreditkarte alles erledigt', w.eval('(a => a.erledigt === a.total)(abschlussStand())'));
+  w.eval('D.alle.pop()');
+  abLi[1].querySelector('[data-ab=import]').click(); await tick();
+  check('Abschluss: Knopf führt zum Import', $('#v-import').classList.contains('on'));
+
   // Prüfen mit Regel
   doc.querySelector('nav [data-v=pruefen]').click(); await tick();
   const card = $('.pcard'); card.querySelector('.pKat').value = 'Kleider';
