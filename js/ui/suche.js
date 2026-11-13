@@ -7,7 +7,15 @@ const SUCHE_HINWEIS = '<div class="card empty"><span class="small muted">Sucht i
 async function suche() {
   clearTimeout(sucheTimer);
   const q = $('#q').value.trim(), j = $('#qJahr').value, k = $('#qKat').value;
-  if (!q && !j && !k) { sucheAktiv = false; $('#sucheResult').innerHTML = SUCHE_HINWEIS; return; }
+  if (!q && !j && !k) {   // ohne Filter: die neuesten Buchungen über alle Jahre
+    sucheAktiv = false;
+    const neu = D ? (await call('search', '', '', '')).slice(0, 30) : [];
+    if ($('#q').value.trim() || $('#qJahr').value || $('#qKat').value) return;   // inzwischen wird gesucht
+    $('#sucheResult').innerHTML = SUCHE_HINWEIS + (neu.length ? `<h2 class="section">Neueste Buchungen</h2>
+      <div class="card" style="padding-block:var(--s1)">${txList(neu)}</div>` : '');
+    bindTx($('#sucheResult'));
+    return;
+  }
   sucheAktiv = true;
   const seq = ++sucheSeq;
   $('#sucheResult').innerHTML = '<div class="loading">Suche …</div>';

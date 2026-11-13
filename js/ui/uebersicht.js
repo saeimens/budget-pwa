@@ -11,7 +11,8 @@ function renderMonate() {
   $$('#monate button').forEach(b => b.onclick = () => waehleMonat(+b.dataset.m));
   const on = $('#monate .on'); if (on) on.scrollIntoView({ inline:'center', block:'nearest' });
 }
-function waehleMonat(m) { monat = m; offeneKat = null; renderTitle(); renderMonate(); renderUebersicht(); }
+function waehleMonat(m) { monat = m; offeneKat = null; alleNeuesten = false; renderTitle(); renderMonate(); renderUebersicht(); }
+let alleNeuesten = false;   // «Neueste Buchungen» aufgeklappt
 
 /* Ansicht (Reiter): Budget · Vergleich · Rechnungen · Vermögen */
 let ansicht = 'budget';
@@ -104,7 +105,15 @@ function renderUebersicht() {
     .filter(k => k.ist !== 0 || k.budget > 0)
     .sort((a, b) => b.ist - a.ist);
 
-  $('#uebersicht').innerHTML = `${abschlussKarte()}${hero}${stats}${chart}
+  // Neueste Buchungen des Zeitraums (alle Typen): was zuletzt passiert ist, ohne Umweg über die Suche
+  const neueste = imZ.slice().sort((a, b) => b.datum.localeCompare(a.datum) || b.row - a.row);
+  const zeitraum = monat === 0 ? `im Jahr ${D.jahr}` : `im ${MONATE_LANG[monat - 1]}`;
+  const neu = neueste.length ? `<h2 class="section">Neueste Buchungen</h2>
+    <div class="card" style="padding-block:var(--s1)">${txList(alleNeuesten ? neueste : neueste.slice(0, 5))}
+      ${neueste.length > 5 ? `<button type="button" class="ghost klein" id="neuMehr" style="width:100%;margin:var(--s2) 0" aria-expanded="${alleNeuesten}">
+        ${alleNeuesten ? 'Weniger anzeigen' : `Alle ${neueste.length} Buchungen ${zeitraum} anzeigen`}</button>` : ''}</div>` : '';
+
+  $('#uebersicht').innerHTML = `${abschlussKarte()}${hero}${stats}${neu}${chart}
     <h2 class="section">Kategorien <span style="font-weight:400">· antippen für Details</span></h2>
     <div class="card" style="padding-block:var(--s1)" id="kats"></div>
     ${rue.length ? `<h2 class="section">Jahresrechnungen</h2><div class="card" style="padding-block:var(--s1)">${txList(rue)}</div>` : ''}
@@ -114,6 +123,7 @@ function renderUebersicht() {
   bindTx($('#uebersicht'));
   bindAbschluss($('#uebersicht'));
   $('#zuRueck').onclick = () => setAnsicht('rechnungen');
+  if ($('#neuMehr')) $('#neuMehr').onclick = () => { alleNeuesten = !alleNeuesten; renderUebersicht(); if (!alleNeuesten) $('#neuMehr').scrollIntoView({ block:'nearest' }); };
   $$('.chart .c').forEach(el => el.onclick = () => waehleMonat(+el.dataset.m));
 }
 

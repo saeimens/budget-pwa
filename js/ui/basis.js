@@ -96,6 +96,7 @@ function setView(v) {
   $('#btnEinst').hidden = v === 'setup' || v === 'login';
   renderTitle();
   if (v === 'pruefen' && pruefenStale && D) renderPruefen();
+  if (v === 'suche' && !sucheAktiv && D) suche();   // ohne Suchbegriff: neueste Buchungen frisch zeigen
   if (v === 'erfassen') setTimeout(() => $('#eBetrag').focus(), 50);
   window.scrollTo(0, 0);
 }

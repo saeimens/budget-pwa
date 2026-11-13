@@ -98,6 +98,18 @@ const tick = (n = 3) => new Promise(r => setTimeout(r, 15 * n));
     && abLi[1].querySelector('[data-ab=import]') && abLi[0].classList.contains('ok') && /erledigt/.test(abLi[0].textContent));
   check('Abschluss: Wise freiwillig ohne Knopf', /freiwillig/.test(abLi[2].textContent) && !abLi[2].querySelector('button'));
   check('Saldo ohne Sparen beschriftet', /ohne Sparen/.test($('#uebersicht .stats').textContent));
+  const neuH = [...doc.querySelectorAll('#uebersicht h2.section')].find(h => /Neueste Buchungen/.test(h.textContent));
+  check('Übersicht: neueste Buchungen des Monats (3, ohne «Alle»)', neuH && neuH.nextElementSibling.querySelectorAll('.tx').length === 3 && !$('#neuMehr'));
+  for (let i = 0; i < 4; i++) w.eval(`D.buchungen.push({ row: ${900 + i}, datum: '2026-11-0${i + 1}', jahr: 2026, monat: 11, typ: 'Ausgabe', betrag: ${i + 1}, kategorie: 'Lebensmittel', notiz: 'Test ${i}', konto: 'Karte', status: 'ok' })`);
+  w.eval('renderUebersicht()');
+  check('Übersicht: 5 neueste, neueste zuerst, Knopf «Alle 7»', $('#neuMehr') && /Alle 7 Buchungen im November/.test($('#neuMehr').textContent)
+    && $('#neuMehr').parentElement.querySelectorAll('.tx').length === 5 && /Migros|Kiosk|Lohn/.test($('#neuMehr').parentElement.querySelector('.tx').textContent));
+  $('#neuMehr').click();
+  check('Übersicht: «Alle» klappt auf', $('#neuMehr').parentElement.querySelectorAll('.tx').length === 7 && $('#neuMehr').getAttribute('aria-expanded') === 'true');
+  w.eval('D.buchungen.splice(-4)'); w.eval('alleNeuesten = false; renderUebersicht()');
+  doc.querySelector('nav [data-v=suche]').click(); await tick(3);
+  check('Suche ohne Begriff zeigt neueste Buchungen', /Neueste Buchungen/.test($('#sucheResult').textContent) && $('#sucheResult').querySelectorAll('.tx').length >= 3);
+  doc.querySelector('nav [data-v=uebersicht]').click(); await tick();
   w.eval("D.alle.push({ datum: '2026-10-29', konto: 'Kreditkarte', betrag: 9, typ: 'Ausgabe', status: 'ok' })");
   check('Abschluss: mit Kreditkarte alles erledigt', w.eval('(a => a.erledigt === a.total)(abschlussStand())'));
   w.eval('D.alle.pop()');
