@@ -48,11 +48,14 @@ async function pruefe(name, kontext) {
   const fehler = [];
   for (const a of ['budget', 'vergleich', 'auswertung', 'rechnungen', 'vermoegen', 'steuern']) { w.eval(`setAnsicht('${a}')`); await tick(); fehler.push(...await pruefe('Übersicht/' + a)); }
   for (const v of ['pruefen', 'import', 'suche', 'erfassen']) { w.eval(`setView('${v}')`); await tick(); fehler.push(...await pruefe(v)); }
+  for (const b of ['budgets', 'rechnungen', 'regeln']) { w.eval(`oeffneVerwalten('${b}')`); await tick(); fehler.push(...await pruefe('Bearbeiten/' + b)); }
+  doc.querySelector('[data-neu="regel"]').click(); await tick();
+  fehler.push(...await pruefe('Dialog Regel', '#vwdlg')); w.eval("document.querySelector('#vwdlg').close()");
   w.eval("setView('uebersicht'); setAnsicht('budget')"); await tick();
   doc.querySelector('#kats .cat').click(); await tick(); doc.querySelector('.cat-detail .tx').click(); await tick();
   fehler.push(...await pruefe('Dialog Bearbeiten', '#edit')); w.eval("document.querySelector('#edit').close()");
   doc.querySelector('#btnEinst').click(); await tick(8); fehler.push(...await pruefe('Dialog Einstellungen', '#edlg'));
   const ok = !fehler.length;
-  console.log(ok ? 'ALLES OK (Barrierefreiheit: 12 Ansichten ohne Verstösse)' : fehler.join('\n'));
+  console.log(ok ? 'ALLES OK (Barrierefreiheit: 16 Ansichten ohne Verstösse)' : fehler.join('\n'));
   process.exit(ok ? 0 : 1);
 })().catch(e => { console.error('ABBRUCH', e); process.exit(1); });

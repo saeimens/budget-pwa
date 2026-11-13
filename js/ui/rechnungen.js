@@ -68,8 +68,10 @@ function renderRueck() {
     <div class="card" style="padding-block:var(--s1)">${posten.map(zeile).join('')}</div>
     ${ohnePlan.length ? `<h2 class="section">Ohne Plan bezahlt</h2><div class="card" style="padding-block:var(--s1)">${ohnePlan.map(o => `
       <div class="rrow row"><span class="grow">${esc(o.kategorie)}</span><span class="num">${chf0(o.ist)}</span></div>`).join('')}</div>
-      <div class="small muted" style="margin-top:var(--s2)">Für diese Kategorien gibt es im Blatt «Rückstellungen» keinen aktiven Posten.</div>` : ''}`;
+      <div class="small muted" style="margin-top:var(--s2)">Für diese Kategorien gibt es im Blatt «Rückstellungen» keinen aktiven Posten.</div>` : ''}
+    <button type="button" class="ghost klein" id="zuPlan" style="margin-top:var(--s3)">Plan bearbeiten</button>`;
 
+  $('#zuPlan').onclick = () => oeffneVerwalten('rechnungen');
   $$('#uebersicht [data-r]').forEach(b => b.onclick = () => { offenR = offenR === b.dataset.r ? null : b.dataset.r; renderRueck(); });
   bindTx($('#uebersicht'));
 }

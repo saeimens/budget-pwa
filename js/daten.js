@@ -152,11 +152,11 @@ const Daten = (() => {
       vermoegen: vm.filter(x => x[0] && x[1] && x[3] !== '' && x[3] !== undefined)
         .map(x => ({ datum: datumAus(x[0]), konto: str(x[1]), gruppe: str(x[2]) || 'Flüssig', saldo: num(x[3]), bemerkung: str(x[4]) })),
       hatVermoegen: hatV,
-      rueckstellungen: rs.filter(x => x[0] && typeof x[2] === 'number')
-        .map(x => ({ posten: str(x[0]), kategorie: str(x[1]), rate: num(x[2]), aktiv: str(x[3]).trim().toLowerCase() !== 'nein', bemerkung: str(x[4]) })),
+      rueckstellungen: rs.map((x, i) => [x, i + 2]).filter(([x]) => x[0] && typeof x[2] === 'number')
+        .map(([x, row]) => ({ row, posten: str(x[0]), kategorie: str(x[1]), rate: num(x[2]), aktiv: str(x[3]).trim().toLowerCase() !== 'nein', bemerkung: str(x[4]) })),
       buchungen: b.map(buchungAusZeile).filter(x => x.datum),
-      kategorien: k.filter(x => x[0] && !String(x[0]).startsWith('Typen'))
-        .map(x => ({ name: str(x[0]), gruppe: str(x[1]), budget: num(x[2]), bemerkung: str(x[3]) })),
+      kategorien: k.map((x, i) => [x, i + 2]).filter(([x]) => x[0] && !String(x[0]).startsWith('Typen'))
+        .map(([x, row]) => ({ row, name: str(x[0]), gruppe: str(x[1]), budget: num(x[2]), bemerkung: str(x[3]) })),
       regelnRows: r, einst, stand: Date.now()
     };
     speicher.set(K.cache, D); melde();
@@ -170,7 +170,7 @@ const Daten = (() => {
     const jahre = [...new Set(alle.map(b => b.jahr))].filter(Boolean).sort();
     const j = Number(jahr) || jahre[jahre.length - 1] || new Date().getFullYear();
     return { jahr: j, jahre, alle, buchungen: alle.filter(b => b.jahr === j), offen: alle.filter(b => b.status === 'prüfen'),
-      kategorien: D ? D.kategorien : [], rueckstellungen: (D && D.rueckstellungen) || [],
+      kategorien: D ? D.kategorien : [], rueckstellungen: (D && D.rueckstellungen) || [], regelnRows: (D && D.regelnRows) || [],
       vermoegen: (D && D.vermoegen) || [], hatVermoegen: !!(D && D.hatVermoegen),
       offline: !navigator.onLine, warteschlange: queue.length };
   }
@@ -275,6 +275,41 @@ const Daten = (() => {
     const data = [];
     for (const x of liste) data.push({ range: 'Buchungen!L' + await zeileFinden(x.row, x.expect), values: [[x.tags]] });
     if (data.length) await api('/values:batchUpdate', { method: 'POST', body: { valueInputOption: 'RAW', data } });
+  }
+
+  /* ---------------- Stammdaten: Kategorien, Rückstellungen, Regeln ---------------- */
+  const BLATT_SPALTEN = { Kategorien: 'D', 'Rückstellungen': 'E', Regeln: 'G' };
+  const zelleWert = v => typeof v === 'number' ? { userEnteredValue: { numberValue: v } } : { userEnteredValue: { stringValue: str(v) } };
+  /**
+   * Eine Zeile in Kategorien / Rückstellungen / Regeln ändern, anlegen oder löschen. Nur online.
+   * aktion: 'setzen' (row, werte, erwartet = bisheriger Inhalt Spalte A), 'neu' (werte, eingefügt nach Zeile row; row 0 = zuoberst),
+   * 'loeschen' (row, erwartet). Vor dem Schreiben wird geprüft, ob die Zeile noch dieselbe ist.
+   */
+  async function blattAendern(blatt, aktion, row, werte, erwartet) {
+    if (!BLATT_SPALTEN[blatt]) throw new Error('Unbekanntes Blatt: ' + blatt);
+    if (!navigator.onLine) throw new Error('Bearbeiten geht nur online');
+    await sync();
+    const ids = await blattIds();
+    if (ids[blatt] === undefined) throw new Error(`Im Sheet fehlt das Blatt «${blatt}»`);
+    if (aktion !== 'neu') {
+      const j = await api('/values/' + encodeURIComponent(`${blatt}!A${row}`) + '?valueRenderOption=UNFORMATTED_VALUE');
+      const ist = j.values && j.values[0] ? str(j.values[0][0]) : '';
+      if (ist !== str(erwartet)) { await laden(); throw new Error('Das Blatt wurde inzwischen geändert. Bitte nochmals versuchen.'); }
+    }
+    const zeile = [{ values: werte.map(zelleWert) }];
+    if (aktion === 'setzen') {
+      await batch([{ updateCells: { start: { sheetId: ids[blatt], rowIndex: row - 1, columnIndex: 0 }, rows: zeile, fields: 'userEnteredValue' } }]);
+    } else if (aktion === 'neu') {
+      const index = Math.max(1, Number(row) || 0);   // 0-basiert: direkt nach Zeile «row»; ohne row zuoberst (neue Regeln)
+      await batch([
+        { insertDimension: { range: { sheetId: ids[blatt], dimension: 'ROWS', startIndex: index, endIndex: index + 1 }, inheritFromBefore: index > 1 } },
+        { updateCells: { start: { sheetId: ids[blatt], rowIndex: index, columnIndex: 0 }, rows: zeile, fields: 'userEnteredValue' } }
+      ]);
+    } else if (aktion === 'loeschen') {
+      await batch([{ deleteDimension: { range: { sheetId: ids[blatt], dimension: 'ROWS', startIndex: row - 1, endIndex: row } } }]);
+    } else throw new Error('Unbekannte Aktion: ' + aktion);
+    await laden();
+    return true;
   }
 
   /* ---------------- Offline-Warteschlange ---------------- */
@@ -383,6 +418,6 @@ const Daten = (() => {
 
   return { konfiguriert, konfigurieren, config: () => Object.assign({}, cfg), anmelden, auffrischen, abmelden, angemeldet, status,
     onStatus: f => { listeners.add(f); return () => listeners.delete(f); },
-    cache, getDataSync, getData, search, addBuchung, updateBuchung, deleteBuchung, importCsv, kontostaendeErfassen, tagsSetzen, sync };
+    cache, getDataSync, getData, search, addBuchung, updateBuchung, deleteBuchung, importCsv, kontostaendeErfassen, tagsSetzen, blattAendern, sync };
 })();
 if (typeof module !== 'undefined') module.exports = Daten;

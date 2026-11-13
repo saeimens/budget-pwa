@@ -117,6 +117,7 @@ function renderUebersicht() {
   $('#uebersicht').innerHTML = `${abschlussKarte()}${hero}${stats}${neu}${chart}
     <h2 class="section">Kategorien <span style="font-weight:400">· antippen für Details</span></h2>
     <div class="card" style="padding-block:var(--s1)" id="kats"></div>
+    <button type="button" class="ghost klein" id="zuBudgets" style="margin-top:var(--s2)">Budgets bearbeiten</button>
     ${rue.length ? `<h2 class="section">Jahresrechnungen</h2><div class="card" style="padding-block:var(--s1)">${txList(rue)}</div>` : ''}
     ${ein.length ? `<details style="margin-top:var(--s3)"><summary>Einnahmen anzeigen (${ein.length})</summary>
        <div class="card" style="padding-block:var(--s1)">${txList(ein)}</div></details>` : ''}`;
@@ -124,6 +125,7 @@ function renderUebersicht() {
   bindTx($('#uebersicht'));
   bindAbschluss($('#uebersicht'));
   $('#zuRueck').onclick = () => setAnsicht('rechnungen');
+  $('#zuBudgets').onclick = () => oeffneVerwalten('budgets');
   if ($('#neuMehr')) $('#neuMehr').onclick = () => { alleNeuesten = !alleNeuesten; renderUebersicht(); if (!alleNeuesten) $('#neuMehr').scrollIntoView({ block:'nearest' }); };
   $$('.chart .c').forEach(el => el.onclick = () => waehleMonat(+el.dataset.m));
 }

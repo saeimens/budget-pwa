@@ -6,7 +6,7 @@ const MONATE = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','No
 const MONATE_LANG = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
 const TYPEN = [['Ausgabe','Ausgabe'], ['Einnahme','Einnahme'], ['Rückstellung','Jahresrechnung (Rückstellung)'], ['Sparen','Sparen']];
 const KONTEN = ['Bar','Twint','Karte','Kreditkarte','Wise'];
-const VIEW_TITEL = { pruefen:'Zu prüfen', import:'Import', suche:'Suche', erfassen:'Erfassen' };
+const VIEW_TITEL = { pruefen:'Zu prüfen', import:'Import', suche:'Suche', erfassen:'Erfassen', verwalten:'Budgets & Regeln' };
 const HEUTE = new Date(), CUR_Y = HEUTE.getFullYear(), CUR_M = HEUTE.getMonth() + 1;
 
 let D = null;                 // Daten vom Server
@@ -98,6 +98,7 @@ function setView(v) {
   if (v === 'pruefen' && pruefenStale && D) renderPruefen();
   if (v === 'suche' && !sucheAktiv && D) suche();   // ohne Suchbegriff: neueste Buchungen frisch zeigen
   if (v === 'erfassen') setTimeout(() => $('#eBetrag').focus(), 50);
+  if (v === 'verwalten') renderVerwalten();
   window.scrollTo(0, 0);
 }
 $$('nav button').forEach(b => b.onclick = () => setView(b.dataset.v));

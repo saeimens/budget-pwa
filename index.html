@@ -108,6 +108,11 @@
     <div id="sucheResult" style="margin-top:var(--s3)" aria-live="polite"></div>
   </section>
 
+  <!-- BEARBEITEN: Budgets, Jahresrechnungen, Regeln -->
+  <section class="view" id="v-verwalten">
+    <div id="verwalten"></div>
+  </section>
+
   <!-- ERFASSEN -->
   <section class="view" id="v-erfassen">
     <form class="card stack" id="fErfassen" novalidate>
@@ -159,6 +164,21 @@
   </form>
 </dialog>
 
+<!-- Budget / Posten / Regel bearbeiten -->
+<dialog id="vwdlg" aria-labelledby="vwTitel">
+  <form id="vwForm" class="stack" novalidate>
+    <div class="row" style="align-items:flex-start">
+      <b id="vwTitel" class="grow" style="font-size:18px"></b>
+      <button type="button" class="icon-btn" id="vwClose" aria-label="Schliessen"><span data-ico="x"></span></button>
+    </div>
+    <div id="vwFelder" class="stack"></div>
+    <div class="row">
+      <button type="button" class="ghost danger" id="vwDel">Löschen</button>
+      <button type="submit" class="grow">Speichern</button>
+    </div>
+  </form>
+</dialog>
+
 <!-- Sperrbildschirm -->
 <div id="sperre" class="sperre" hidden role="dialog" aria-modal="true" aria-labelledby="sperreTitel">
   <div class="sperre-box stack">
@@ -183,6 +203,8 @@
     </div>
     <div class="section" style="margin:0">App-Sperre</div>
     <div id="eSperre" class="stack"></div>
+    <div class="section" style="margin:var(--s4) 0 0">Daten</div>
+    <button type="button" class="ghost" id="eVerwalten" style="width:100%">Budgets, Jahresrechnungen &amp; Regeln bearbeiten</button>
     <div class="section" style="margin:var(--s4) 0 0">Konto</div>
     <div class="small muted" id="eKontoInfo"></div>
     <div class="row"><button type="button" class="ghost grow" id="eSetup">Einrichtung ändern</button>
@@ -229,6 +251,7 @@
 <script src="js/ui/vermoegen.js"></script>
 <script src="js/ui/vergleich.js"></script>
 <script src="js/ui/auswertung.js"></script>
+<script src="js/ui/verwalten.js"></script>
 <script src="js/ui/einrichtung.js"></script>
 <script src="js/ui/sperre-ui.js"></script>
 <script src="js/ui/einstellungen.js"></script>

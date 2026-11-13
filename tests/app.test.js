@@ -52,7 +52,7 @@ async function fakeFetch(url, opt = {}) {
       if (r.sortRange) { const t = S[NAME[r.sortRange.range.sheetId]]; const kopf = t.shift(); t.sort((a, b) => a[0] - b[0]); t.unshift(kopf); }
       if (r.deleteDimension) { const g = r.deleteDimension.range; S[NAME[g.sheetId]].splice(g.startIndex, g.endIndex - g.startIndex); }
       if (r.insertDimension) { const g = r.insertDimension.range; S[NAME[g.sheetId]].splice(g.startIndex, 0, []); }
-      if (r.updateCells) { const st = r.updateCells.start; S[NAME[st.sheetId]][st.rowIndex] = r.updateCells.rows[0].values.map(v => v.userEnteredValue.stringValue); }
+      if (r.updateCells) { const st = r.updateCells.start; S[NAME[st.sheetId]][st.rowIndex] = r.updateCells.rows[0].values.map(v => v.userEnteredValue.numberValue ?? v.userEnteredValue.stringValue); }
     }
     return ok({});
   }
@@ -215,6 +215,59 @@ const tick = (n = 3) => new Promise(r => setTimeout(r, 15 * n));
   $('#jahr').value = String(y); $('#jahr').dispatchEvent(new w.Event('change')); await tick(6);
   S.Buchungen.splice(S.Buchungen.findIndex(r => r[12] === 'aw1'), 4);
   await w.eval('load(null)'); await tick(6);
+
+
+  // Budgets, Jahresrechnungen-Plan und Regeln in der App bearbeiten
+  const sicher = JSON.stringify({ k: S.Kategorien, r: S.Regeln, p: S['Rückstellungen'] });
+  const speichern = async () => { $('#vwForm button[type=submit]').click(); await tick(8); };
+  $('#btnEinst').click(); await tick(8); $('#eVerwalten').click(); await tick();
+  check('Bearbeiten: über Einstellungen erreichbar', $('#v-verwalten').classList.contains('on') && $('#title').textContent === 'Budgets & Regeln'
+    && /Lebensmittel/.test($('#verwalten').textContent) && !$('#edlg').open);
+  $('[data-k="Lebensmittel"]').click(); await tick();
+  check('Budget: Dialog vorbelegt, Name nicht änderbar', $('#vwdlg').open && $('#vwBudget').value === '150' && !$('#vwName') && $('#vwDel').hidden);
+  $('#vwBudget').value = '180'; await speichern();
+  check('Budget: gespeichert im Blatt und in der App', S.Kategorien[1][2] === 180 && S.Kategorien[1][1] === 'Alltag' && !$('#vwdlg').open
+    && w.eval('D.kategorien').find(k => k.name === 'Lebensmittel').budget === 180 && /Gespeichert/.test($('#toast').textContent));
+  $('[data-neu="kategorie"]').click(); await tick();
+  $('#vwName').value = 'lebensmittel'; await speichern();
+  check('Neue Kategorie: doppelter Name abgelehnt', $('#vwdlg').open && S.Kategorien.length === 4 && /gibt es schon/.test($('#toast').textContent));
+  $('#vwName').value = 'Velo'; $('#vwGruppe').value = 'Alltag'; $('#vwBudget').value = '40'; await speichern();
+  check('Neue Kategorie: nach der Gruppe eingefügt, Hinweiszeile bleibt unten', S.Kategorien[3][0] === 'Velo' && S.Kategorien[3][2] === 40
+    && /^Typen/.test(S.Kategorien[S.Kategorien.length - 1][0]) && w.eval('D.kategorien').some(k => k.name === 'Velo'));
+  $('[data-vw="rechnungen"]').click(); await tick();
+  const serafe = [...doc.querySelectorAll('[data-p]')].find(b => /Serafe/.test(b.textContent)); serafe.click(); await tick();
+  $('#vwRate').value = '30'; $('#vwAktiv').value = 'nein'; await speichern();
+  check('Jahresrechnung: Rate und Aktiv gespeichert', JSON.stringify(S['Rückstellungen'][2]) === JSON.stringify(['Serafe', 'Serafe', 30, 'nein', 'jährlich'])
+    && /inaktiv/.test([...doc.querySelectorAll('[data-p]')].find(b => /Serafe/.test(b.textContent)).textContent));
+  $('[data-vw="regeln"]').click(); await tick();
+  const nR = S.Regeln.length - 1;
+  check('Regeln: Liste mit Position', doc.querySelectorAll('[data-rg]').length === nR && /#1/.test($('[data-rg]').textContent));
+  $('[data-neu="regel"]').click(); await tick();
+  $('#vwSb').value = 'migros + bern'; $('#vwSb').dispatchEvent(new w.Event('input')); await tick(1);
+  check('Neue Regel: zeigt Treffer in Bank-Texten', /Kommt in 1 bisherigen/.test($('#vwTreffer').textContent));
+  $('#vwTyp').value = 'Ausgabe'; $('#vwKat').value = ''; await speichern();
+  check('Neue Regel: Ausgabe ohne Kategorie abgelehnt', $('#vwdlg').open && /braucht die Regel eine Kategorie/.test($('#toast').textContent));
+  $('#vwKat').value = 'Lebensmittel'; $('#vwFaktor').value = '0,5'; $('#vwNotiz').value = 'Migros Bern'; await speichern();
+  check('Neue Regel: zuoberst eingefügt', JSON.stringify(S.Regeln[1]) === JSON.stringify(['migros + bern', 'beide', 'Ausgabe', 'Lebensmittel', 0.5, '', 'Migros Bern'])
+    && doc.querySelectorAll('[data-rg]').length === nR + 1);
+  $('#vwSuche').value = 'Ignor'; $('#vwSuche').dispatchEvent(new w.Event('input')); await tick();
+  check('Regeln: Suche filtert', doc.querySelectorAll('[data-rg]').length === 1 && new RegExp('1 von ' + (nR + 1)).test($('#verwalten').textContent) && doc.activeElement === $('#vwSuche'));
+  $('[data-rg]').click(); await tick();
+  check('Ignorieren-Regel: Kategorie gesperrt', $('#vwKat').disabled && !$('#vwDel').hidden);
+  const posIgn = S.Regeln.findIndex(r => r[0] === 'Ignoriermich');
+  $('#vwDel').click(); await tick(8);
+  check('Regel löschen: weg, mit Rückgängig', !S.Regeln.some(r => r[0] === 'Ignoriermich') && $('#toast button') && /Rückgängig/.test($('#toast button').textContent));
+  $('#toast button').click(); await tick(8);
+  check('Rückgängig: Regel an derselben Stelle zurück', S.Regeln[posIgn] && S.Regeln[posIgn][0] === 'Ignoriermich' && S.Regeln[posIgn][2] === 'Ignorieren');
+  $('#vwSuche').value = ''; $('#vwSuche').dispatchEvent(new w.Event('input')); await tick();
+  S.Regeln[1][0] = 'inzwischen im Sheet geändert';
+  $('[data-rg="2"]').click(); await tick(); $('#vwNotiz').value = 'neu'; await speichern();
+  check('Zeile im Sheet geändert: nichts überschrieben, Hinweis', S.Regeln[1][0] === 'inzwischen im Sheet geändert' && S.Regeln[1][6] !== 'neu'
+    && /inzwischen geändert/.test($('#toast').textContent));
+  $('#vwdlg').close();
+  const zurueck = JSON.parse(sicher); S.Kategorien = zurueck.k; S.Regeln = zurueck.r; S['Rückstellungen'] = zurueck.p;
+  await w.eval('load(null)'); await tick(6);
+  doc.querySelector('nav [data-v=uebersicht]').click(); await tick();
 
 
   // Jahresrechnungen: Plan vs. bezahlt

@@ -66,6 +66,7 @@ async function renderEinst() {
 }
 $('#btnEinst').onclick = async () => { await renderEinst(); $('#edlg').showModal(); };
 $('#eClose').onclick = () => $('#edlg').close();
+$('#eVerwalten').onclick = () => { $('#edlg').close(); oeffneVerwalten('budgets'); };
 $('#edlg').addEventListener('click', e => { if (e.target === $('#edlg')) $('#edlg').close(); });
 $('#eSetup').onclick = () => { $('#edlg').close(); $('#btnSetupAendern').click(); };
 $('#eAbmelden').onclick = () => { Daten.abmelden(); $('#edlg').close(); setView('login'); toast('Abgemeldet'); };
