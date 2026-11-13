@@ -273,6 +273,28 @@ const tick = (n = 3) => new Promise(r => setTimeout(r, 15 * n));
   check('Reiter: Ende → Steuern', /^Steuern/.test($('#title').textContent));
   w.eval("setAnsicht('budget')"); await tick();
 
+  // Prüfen: Vorschlag aus früheren Buchungen, gleiche Händler als Gruppe
+  S.Buchungen.push([ser(`${y}-06-01`), y, 6, 'Ausgabe', 8, 'Lebensmittel', 'Bäckerei', 'Karte', 'Bäckerei Muster;3000 Bern | Zahlung Debitkarte', 'Import', 'ok', '', 'h1']);
+  S.Buchungen.push([ser(`${y}-11-02`), y, 11, 'Ausgabe', 6.5, '', 'Bäckerei', 'Karte', 'BÄCKEREI MUSTER;3000 Bern | Zahlung Debitkarte', 'Import', 'prüfen', '', 'p1']);
+  S.Buchungen.push([ser(`${y}-11-03`), y, 11, 'Ausgabe', 7.2, '', 'Bäckerei', 'Karte', 'Bäckerei Muster;3000 Bern | Zahlung Debitkarte', 'Import', 'prüfen', '', 'p2']);
+  S.Buchungen.push([ser(`${y}-11-04`), y, 11, 'Ausgabe', 20, '', 'Kiosk Y', 'Karte', 'KIOSK YPSILON 12 CHE', 'Import', 'prüfen', '', 'p3']);
+  S.Buchungen.push([ser(`${y}-11-05`), y, 11, 'Ausgabe', 21, '', 'Kiosk Y', 'Karte', 'KIOSK YPSILON 13 CHE', 'Import', 'prüfen', '', 'p4']);
+  await w.eval('load(null, { pruefen: true })'); await tick(6);
+  doc.querySelector('nav [data-v=pruefen]').click(); await tick();
+  const gruppen = $$('.pgruppe');
+  const baeck = gruppen.find(g => /Bäckerei/.test(g.textContent));
+  check('Prüfen: gleiche Händler als Gruppe (2 Gruppen)', gruppen.length === 2 && !!baeck && /Alle 2 speichern/.test(baeck.textContent));
+  check('Prüfen: Kategorie aus früherer Buchung vorgeschlagen', $('.pKat', baeck).value === 'Lebensmittel' && /wie 1 frühere Buchung/.test(baeck.textContent));
+  $('.pOk', baeck).click(); await tick(12);
+  const gesp = ['p1', 'p2'].map(k => S.Buchungen.find(r => r[12] === k));
+  check('Prüfen: «Alle speichern» ordnet beide zu', gesp.every(r => r[5] === 'Lebensmittel' && r[10] === 'ok'));
+  const kiosk = $$('.pgruppe').find(g => /Kiosk Y/.test(g.textContent));
+  check('Prüfen: Gruppe ohne Vorgeschichte hat keinen Vorschlag', !!kiosk && $('.pKat', kiosk).value === '' && !/Vorschlag/.test(kiosk.textContent));
+  $('.pEinzeln', kiosk).click(); await tick();
+  check('Prüfen: «Einzeln bearbeiten» zeigt zwei Karten', $$('#pruefen .pcard:not(.pgruppe)').filter(c => /Kiosk Y/.test(c.textContent)).length === 2);
+  for (const c of $$('#pruefen .pcard:not(.pgruppe)').filter(c => /Kiosk Y/.test(c.textContent))) { $('.pKat', c).value = 'Lebensmittel'; $('.pOk', c).click(); await tick(10); }
+  doc.querySelector('nav [data-v=uebersicht]').click(); await tick();
+
   // Anmeldung erneuert sich beim nächsten Tipp (statt «Anmelden» zu suchen)
   const tokVorher = w.__tokAnfragen;
   $('main').dispatchEvent(new w.Event('pointerdown', { bubbles: true })); await tick();
