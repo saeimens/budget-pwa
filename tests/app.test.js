@@ -191,6 +191,32 @@ const tick = (n = 3) => new Promise(r => setTimeout(r, 15 * n));
   check('Vergleich: nach Kategorie', /Kategorie/.test(doc.querySelector('h2.section.row').textContent) && doc.querySelectorAll('.vrow').length >= 2);
 
 
+  // Auswertung: Prognose, Einnahmen nach Auftraggeber, Reisen, Sparquote
+  S.Buchungen.push([ser(`${y - 1}-06-25`), y - 1, 6, 'Einnahme', 4000, 'Lohn', 'Lohn alt', 'Lohnkonto', 'LOHN', 'Import', 'ok', '', 'aw1']);
+  S.Buchungen.push([ser(`${y}-04-20`), y, 4, 'Ausgabe', 800, 'Reise Rom Apr 2026', 'Hotel Rom', 'Karte', 'HOTEL', 'Import', 'ok', '', 'aw2']);
+  S.Buchungen.push([ser(`${y}-04-22`), y, 4, 'Ausgabe', 60, 'Reise Rom Apr 2026', 'Essen Rom', 'Karte', 'ESSEN', 'Import', 'ok', '', 'aw3']);
+  S.Buchungen.push([ser(`${y}-03-10`), y, 3, 'Sparen', 1000, 'Viac Sparen', 'Viac', 'Lohnkonto', 'VIAC', 'Import', 'ok', '', 'aw4']);
+  await w.eval('load(null)'); await tick(6);
+  doc.querySelector('#tabs [data-a="auswertung"]').click(); await tick();
+  check('Auswertung: Titel & Jahr-Auswahl sichtbar', $('#title').textContent === `Auswertung ${y}` && !$('#jahr').hidden);
+  check('Auswertung: Prognose im laufenden Jahr', /Prognose/.test($('.hero .label').textContent) && /Budget 3'000/.test($('.hero').textContent));
+  const eRow = doc.querySelector('[data-aw="e:Lohn"]');
+  check('Auswertung: Einnahmen mit Vorjahr', !!eRow && eRow.textContent.includes("5'000") && /4'000/.test(eRow.textContent) && /25 %/.test(eRow.textContent));
+  const rRow = doc.querySelector('[data-aw="r:Reise Rom Apr 2026"]');
+  check('Auswertung: Reise ohne Präfix, Summe & Zeitraum', !!rRow && /^\s*Rom Apr 2026/.test(rRow.querySelector('.name').textContent)
+    && rRow.textContent.includes('860') && /2 Buchungen/.test(rRow.textContent));
+  rRow.click(); await tick();
+  check('Auswertung: Reise aufklappen zeigt Buchungen', doc.querySelectorAll('.cat-detail .tx').length === 2
+    && doc.querySelector('[data-aw="r:Reise Rom Apr 2026"]').getAttribute('aria-expanded') === 'true');
+  const quoteZeile = [...doc.querySelectorAll('table.tab tbody tr')].find(tr => tr.textContent.startsWith(String(y)));
+  check('Auswertung: Sparquote pro Jahr', doc.querySelectorAll('table.tab tbody tr').length === 2 && /20 %/.test(quoteZeile.textContent));
+  $('#jahr').value = String(y - 1); $('#jahr').dispatchEvent(new w.Event('change')); await tick(6);
+  check('Auswertung Vorjahr: Sparquote als Hauptzahl, keine Reisen', /Sparquote/.test($('.hero .label').textContent) && /Keine Reisen/.test($('#uebersicht').textContent));
+  $('#jahr').value = String(y); $('#jahr').dispatchEvent(new w.Event('change')); await tick(6);
+  S.Buchungen.splice(S.Buchungen.findIndex(r => r[12] === 'aw1'), 4);
+  await w.eval('load(null)'); await tick(6);
+
+
   // Jahresrechnungen: Plan vs. bezahlt
   S.Buchungen.push([ser(`${y}-01-15`), y, 1, 'Rückstellung', 2000, 'Steuern', 'Steuern', 'Lohnkonto', 'STEUER', 'Import', 'ok', '', 'r1']);
   S.Buchungen.push([ser(`${y}-02-15`), y, 2, 'Rückstellung', 300, 'Rechtsschutz', 'Versicherung', 'Lohnkonto', 'VERSICHERUNG', 'Import', 'ok', '', 'r2']);

@@ -104,7 +104,7 @@ $$('nav button').forEach(b => b.onclick = () => setView(b.dataset.v));
 
 function renderTitle() {
   let t = VIEW_TITEL[view];
-  if (!t) t = !D ? 'Budget' : ansicht === 'vergleich' ? 'Jahresvergleich' : ansicht === 'rechnungen' ? `Jahresrechnungen ${D.jahr}` : ansicht === 'vermoegen' ? 'Vermögen' : ansicht === 'steuern' ? `Steuern ${D.jahr}` : monat === 0 ? `Jahr ${D.jahr}` : `${MONATE_LANG[monat - 1]} ${D.jahr}`;
+  if (!t) t = !D ? 'Budget' : ansicht === 'vergleich' ? 'Jahresvergleich' : ansicht === 'rechnungen' ? `Jahresrechnungen ${D.jahr}` : ansicht === 'vermoegen' ? 'Vermögen' : ansicht === 'steuern' ? `Steuern ${D.jahr}` : ansicht === 'auswertung' ? `Auswertung ${D.jahr}` : monat === 0 ? `Jahr ${D.jahr}` : `${MONATE_LANG[monat - 1]} ${D.jahr}`;
   $('#title').textContent = t;
   document.title = t === 'Budget' ? 'Budget' : `${t} · Budget`;
 }

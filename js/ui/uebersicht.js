@@ -14,10 +14,10 @@ function renderMonate() {
 function waehleMonat(m) { monat = m; offeneKat = null; alleNeuesten = false; renderTitle(); renderMonate(); renderUebersicht(); }
 let alleNeuesten = false;   // «Neueste Buchungen» aufgeklappt
 
-/* Ansicht (Reiter): Budget · Vergleich · Rechnungen · Vermögen */
+/* Ansicht (Reiter): Budget · Vergleich · Auswertung · Rechnungen · Vermögen · Steuern */
 let ansicht = 'budget';
 function setAnsicht(a) {
-  ansicht = a; offeneKat = null; offenR = null;
+  ansicht = a; offeneKat = null; offenR = null; offenAw = null;
   renderTabs(); jahrSichtbar(); renderTitle(); renderMonate(); renderUebersicht();
   window.scrollTo(0, 0);
 }
@@ -46,6 +46,7 @@ function renderUebersicht() {
   if (ansicht === 'rechnungen') return renderRueck();
   if (ansicht === 'vermoegen') return renderVermoegen();
   if (ansicht === 'steuern') return renderSteuern();
+  if (ansicht === 'auswertung') return renderAuswertung();
   const imZ = D.buchungen.filter(b => monat === 0 || b.monat === monat);
   const nachTyp = t => imZ.filter(b => b.typ === t);
   AUS = nachTyp('Ausgabe');
