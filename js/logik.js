@@ -234,9 +234,9 @@ const Logik = (() => {
   }
   const notizKern = b => String(b.notiz || b.banktext || '').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[0-9.,:/'’-]+/g, ' ')
     .replace(/[^a-zäöüéèàç& ]+/g, ' ').split(/\s+/).filter(w => w.length > 1).slice(0, 2).join(' ');
-  function wiederkehrend(buchungen, heute) {
+  function wiederkehrend(buchungen, heute, typen = ['Ausgabe', 'Rückstellung', 'Sparen']) {
     const gruppen = new Map();
-    buchungen.filter(b => ['Ausgabe', 'Rückstellung', 'Sparen'].includes(b.typ) && b.betrag > 0 && b.datum && b.datum <= heute)
+    buchungen.filter(b => typen.includes(b.typ) && b.betrag > 0 && b.datum && b.datum <= heute)
       .forEach(b => {
         const key = b.typ + '|' + (b.kategorie || '') + '|' + notizKern(b);
         if (!gruppen.has(key)) gruppen.set(key, []);
@@ -324,6 +324,41 @@ const Logik = (() => {
     return out.sort((a, b) => rang[a.art] - rang[b.art]);
   }
 
-  return { parseCsv, parseNum, classify, regelnAusZeilen, auswerten, wiederkehrend, auffaelligkeiten, plusMonate };
+  /**
+   * Kontostand-Prognose (Lohnkonto) für die nächsten Monate.
+   * Start = letzter bekannter Saldo; bis heute zählen die tatsächlichen Buchungen. Danach pro Monat:
+   * + wiederkehrende Einnahmen, − wiederkehrende Zahlungen (Abos, Miete, Jahresrechnungen, Sparen),
+   * − übrige laufende Ausgaben im Schnitt der letzten 12 Monate (ohne Reisen; im laufenden Monat nur der Rest).
+   * @returns { heute:{saldo}, schnittVariabel, monate:[{ monat, ein, fix, variabel, ende, posten:[{datum,name,betrag,ein}] }] }
+   */
+  function prognose(buchungen, start, heute, anzahl = 6) {
+    const istReise = k => /^Reise\s/.test(k || '');
+    const vz = b => b.typ === 'Einnahme' ? b.betrag : -b.betrag;
+    let saldo = start.saldo + buchungen.filter(b => b.datum > start.datum && b.datum <= heute).reduce((a, b) => a + vz(b), 0);
+    const saldoHeute = saldo;
+    const aus = wiederkehrend(buchungen, heute), ein = wiederkehrend(buchungen, heute, ['Einnahme']);
+    const abo = new Set(); aus.forEach(w => w.buchungen.forEach(b => abo.add(b)));
+    const monat = heute.slice(0, 7);
+    const vorher = Array.from({ length: 12 }, (_, i) => plusMonate(monat + '-01', -(i + 1)).slice(0, 7));
+    const variabel = buchungen.filter(b => b.typ === 'Ausgabe' && !abo.has(b) && !istReise(b.kategorie));
+    const schnitt = variabel.filter(b => vorher.includes(b.datum.slice(0, 7))).reduce((a, b) => a + b.betrag, 0) / 12;
+    const schonDiesenMonat = variabel.filter(b => b.datum.slice(0, 7) === monat && b.datum <= heute).reduce((a, b) => a + b.betrag, 0);
+    // Termine eines Monats; im laufenden Monat auch noch nicht verbuchte, überfällige Termine
+    const termine = (w, m) => { const out = []; let d = w.naechste; while (d.slice(0, 7) <= m) { if (d.slice(0, 7) === m || (m === monat && d < m)) out.push(d); d = plusMonate(d, w.monate); } return out; };
+    const monate = [];
+    for (let i = 0; i < anzahl; i++) {
+      const m = plusMonate(monat + '-01', i).slice(0, 7), posten = [];
+      ein.forEach(w => termine(w, m).forEach(d => posten.push({ datum: d, name: w.name, betrag: w.betrag, ein: true })));
+      aus.forEach(w => termine(w, m).forEach(d => posten.push({ datum: d, name: w.name, betrag: w.betrag, ein: false })));
+      const e = posten.filter(p => p.ein).reduce((a, p) => a + p.betrag, 0), f = posten.filter(p => !p.ein).reduce((a, p) => a + p.betrag, 0);
+      const v = i === 0 ? Math.max(0, schnitt - schonDiesenMonat) : schnitt;
+      saldo += e - f - v;
+      monate.push({ monat: m, ein: Math.round(e * 100) / 100, fix: Math.round(f * 100) / 100, variabel: Math.round(v * 100) / 100,
+        ende: Math.round(saldo * 100) / 100, posten: posten.sort((a, b) => a.datum.localeCompare(b.datum)) });
+    }
+    return { heute: { saldo: Math.round(saldoHeute * 100) / 100 }, schnittVariabel: Math.round(schnitt * 100) / 100, monate };
+  }
+
+  return { parseCsv, parseNum, classify, regelnAusZeilen, auswerten, wiederkehrend, auffaelligkeiten, prognose, plusMonate };
 })();
 if (typeof module !== 'undefined') module.exports = Logik;

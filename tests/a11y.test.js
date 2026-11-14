@@ -48,7 +48,7 @@ async function pruefe(name, kontext) {
   const fehler = [];
   for (const a of ['budget', 'vergleich', 'auswertung', 'rechnungen', 'vermoegen', 'steuern']) { w.eval(`setAnsicht('${a}')`); await tick(); fehler.push(...await pruefe('Übersicht/' + a)); }
   for (const v of ['pruefen', 'import', 'suche', 'erfassen']) { w.eval(`setView('${v}')`); await tick(); fehler.push(...await pruefe(v)); }
-  for (const b of ['budgets', 'rechnungen', 'regeln']) { w.eval(`oeffneVerwalten('${b}')`); await tick(); fehler.push(...await pruefe('Bearbeiten/' + b)); }
+  for (const b of ['budgets', 'rechnungen', 'ziele', 'regeln']) { w.eval(`oeffneVerwalten('${b}')`); await tick(); fehler.push(...await pruefe('Bearbeiten/' + b)); }
   doc.querySelector('[data-neu="regel"]').click(); await tick();
   fehler.push(...await pruefe('Dialog Regel', '#vwdlg')); w.eval("document.querySelector('#vwdlg').close()");
   w.eval("setView('uebersicht'); setAnsicht('budget')"); await tick();
@@ -58,6 +58,6 @@ async function pruefe(name, kontext) {
   fehler.push(...await pruefe('Dialog Neue Reise', '#reisedlg')); w.eval("document.querySelector('#reisedlg').close(); document.querySelector('#edit').close()");
   doc.querySelector('#btnEinst').click(); await tick(8); fehler.push(...await pruefe('Dialog Einstellungen', '#edlg'));
   const ok = !fehler.length;
-  console.log(ok ? 'ALLES OK (Barrierefreiheit: 17 Ansichten ohne Verstösse)' : fehler.join('\n'));
+  console.log(ok ? 'ALLES OK (Barrierefreiheit: 18 Ansichten ohne Verstösse)' : fehler.join('\n'));
   process.exit(ok ? 0 : 1);
 })().catch(e => { console.error('ABBRUCH', e); process.exit(1); });

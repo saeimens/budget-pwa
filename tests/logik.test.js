@@ -174,6 +174,26 @@ test('Auffälligkeiten: grosse Ausgabe, Kategorie über Schnitt, Abo teurer und 
   assert.strictEqual(new Set(r.map(x => x.id)).size, r.length);
 });
 
+test('Prognose Kontostand: Start + Buchungen seither, dann Lohn, Fixkosten, Jahresrechnung und Schnitt der übrigen Ausgaben', () => {
+  const b = (datum, typ, betrag, kategorie, notiz) => ({ datum, typ, betrag, kategorie, notiz });
+  const l = [];
+  for (let m = 1; m <= 11; m++) {
+    const mm = String(m).padStart(2, '0');
+    if (m <= 10) l.push(b(`2026-${mm}-25`, 'Einnahme', 5000, 'Lohn', 'Lohn'));
+    l.push(b(`2026-${mm}-01`, 'Ausgabe', 1500, 'Miete', 'Miete'));
+    if (m <= 10) l.push(b(`2026-${mm}-12`, 'Ausgabe', 600, 'Lebensmittel', 'Einkauf'), b(`2026-${mm}-27`, 'Ausgabe', 600, 'Lebensmittel', 'Einkauf'));
+  }
+  ['2025-02-15', '2026-02-15'].forEach(d => l.push(b(d, 'Rückstellung', 7000, 'Steuern', 'Steuern')));
+  l.push(b('2026-11-03', 'Ausgabe', 200, 'Lebensmittel', 'Einkauf'), b('2026-11-04', 'Ausgabe', 3000, 'Reise Rom Nov 2026', 'Hotel'));
+  const p = L.prognose(l, { datum: '2026-10-31', saldo: 10000 }, '2026-11-12', 4);
+  assert.strictEqual(p.heute.saldo, 10000 - 1500 - 200 - 3000);
+  assert.strictEqual(p.schnittVariabel, 1000);   // 10 Monate × 1'200 / 12, Reise nicht dabei
+  assert.deepStrictEqual(p.monate.map(m => m.monat), ['2026-11', '2026-12', '2027-01', '2027-02']);
+  assert.strictEqual(p.monate[0].ein, 5000); assert.strictEqual(p.monate[0].fix, 0); assert.strictEqual(p.monate[0].variabel, 800);
+  assert.strictEqual(p.monate[1].fix, 1500); assert.strictEqual(p.monate[3].fix, 1500 + 7000);
+  assert.strictEqual(p.monate[3].ende, 5300 + 5000 - 800 + 3 * (5000 - 1500 - 1000) - 7000);
+});
+
 test('Monate addieren: Monatsende', () => {
   assert.strictEqual(L.plusMonate('2026-01-31', 1), '2026-02-28');
   assert.strictEqual(L.plusMonate('2026-11-15', 2), '2027-01-15');

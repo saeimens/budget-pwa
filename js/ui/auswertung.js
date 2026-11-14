@@ -29,6 +29,30 @@ function awPrognose(alle) {
   return { bisher, reisen, schnitt, rest, prognose, ohneReisen: prognose - reisen, budget: D.kategorien.reduce((a, k) => a + k.budget, 0) * 12 };
 }
 
+// Gestapelte Säulen: Einnahmen der letzten 12 Monate, fest (regelmässig wiederkehrend) und variabel
+function einnahmenFestVariabel() {
+  const alle = D.alle || D.buchungen, heute = isoLocal(HEUTE);
+  const fest = new Set(); Logik.wiederkehrend(alle, heute, ['Einnahme']).forEach(w => w.buchungen.forEach(b => fest.add(b)));
+  const monate = Array.from({ length: 12 }, (_, i) => Logik.plusMonate(heute.slice(0, 7) + '-01', i - 11).slice(0, 7));
+  const daten = monate.map(m => { const l = alle.filter(b => b.typ === 'Einnahme' && b.datum.slice(0, 7) === m);
+    return { m, f: l.filter(b => fest.has(b)).reduce((a, b) => a + b.betrag, 0), v: l.filter(b => !fest.has(b)).reduce((a, b) => a + b.betrag, 0) }; });
+  if (!daten.some(d => d.f + d.v > 0)) return '';
+  const max = Math.max(1, ...daten.map(d => d.f + d.v)), H = 110;
+  const mn = m => MONATE[+m.slice(5) - 1];
+  const sf = daten.reduce((a, d) => a + d.f, 0) / 12, sv = daten.reduce((a, d) => a + d.v, 0) / 12;
+  return `<h2 class="section">Einnahmen fest und variabel · 12 Monate</h2><div class="card">
+    <div class="legend" style="margin:0 0 var(--s2)"><span><i style="background:var(--serie-1)"></i>Fest (regelmässig) ≈ ${chf0(sf)}/Monat</span>
+      <span><i style="background:var(--serie-2)"></i>Variabel ≈ ${chf0(sv)}/Monat</span></div>
+    <div class="sbars" style="height:${H + 22}px" role="img" aria-label="Einnahmen pro Monat: ${daten.map(d => `${mn(d.m)} fest ${chf0(d.f)}, variabel ${chf0(d.v)}`).join('; ')}">
+      ${daten.map(d => `<div class="sb" title="${mn(d.m)} ${d.m.slice(0, 4)}: fest ${chf0(d.f)} · variabel ${chf0(d.v)} CHF">
+        <span class="sstack" style="height:${(d.f + d.v) / max * H}px">${d.v > 0 ? `<span style="flex:${d.v};background:var(--serie-2)"></span>` : ''}${d.f > 0 ? `<span style="flex:${d.f};background:var(--serie-1)"></span>` : ''}</span>
+        <span class="jx">${mn(d.m)[0]}</span></div>`).join('')}</div>
+    <details style="margin-top:var(--s3)"><summary>Als Tabelle anzeigen</summary>
+      <table class="tab"><thead><tr><th>Monat</th><th>Fest</th><th>Variabel</th><th>Total</th></tr></thead><tbody>
+      ${daten.map(d => `<tr><td>${mn(d.m)} ${d.m.slice(2, 4)}</td><td>${chf0(d.f)}</td><td>${chf0(d.v)}</td><td>${chf0(d.f + d.v)}</td></tr>`).join('')}</tbody></table></details>
+    <div class="small muted" style="margin-top:var(--s2)">Fest = Einnahmen, die regelmässig kommen (Lohn, Hilflosenentschädigung …). Variabel = Aufträge, Rückerstattungen, Einmaliges.</div></div>`;
+}
+
 // Säulen: grosse Reisen pro Jahr (ein Farbton, gezeigtes Jahr kräftiger), Reisebudget als gestrichelte Linie – eine Achse (CHF)
 function reiseVerlauf(reiseJahre, rBudget, jahr) {
   const max = Math.max(1, rBudget, ...reiseJahre.map(x => x.s)), H = 110;
@@ -134,7 +158,7 @@ function renderAuswertung() {
       : `<div class="empty muted">Keine Reisen in ${jahr}.</div>`}</div>
     ${reiseJahre.length ? reiseVerlauf(reiseJahre, rBudget, jahr) : ''}`;
 
-  $('#uebersicht').innerHTML = `<div style="margin-top:var(--s3)">${hero}</div>${laufend ? wiederkehrendHtml() : ''}${einnahmen}${reisen}${sparTab}`;
+  $('#uebersicht').innerHTML = `<div style="margin-top:var(--s3)">${hero}</div>${laufend ? wiederkehrendHtml() : ''}${laufend ? einnahmenFestVariabel() : ''}${einnahmen}${reisen}${sparTab}`;
   $$('#uebersicht [data-aw]').forEach(b => b.onclick = () => { offenAw = offenAw === b.dataset.aw ? null : b.dataset.aw; renderAuswertung(); });
   bindWiederkehrend($('#uebersicht'), renderAuswertung);
   bindTx($('#uebersicht'));

@@ -44,10 +44,12 @@ async function fakeFetch(url, opt = {}) {
   if (!/Bearer tok/.test(opt.headers.Authorization)) return { ok: false, status: 401, statusText: 'x', json: async () => ({}) };
   if (u.searchParams.get('fields')) return ok({ sheets: Object.entries(IDS).map(([t, i]) => ({ properties: { sheetId: i, title: t } })) });
   if (p === '/values:batchGet') return ok({ valueRanges: u.searchParams.getAll('ranges').map(r => ({ values: lesen(r) })) });
+  if (p.startsWith('/values/') && opt.method === 'PUT') { const g = bereich(p.slice(8)); S[g.blatt][g.r1] = body.values[0]; return ok({}); }
   if (p.startsWith('/values/')) return ok({ values: lesen(p.slice(8)) });
   if (p === '/values:batchUpdate') { body.data.forEach(d => { const b = bereich(d.range); S[b.blatt][b.r1][b.c1] = d.values[0][0]; }); return ok({}); }
   if (p === ':batchUpdate') {
     for (const r of body.requests) {
+      if (r.addSheet) { const t = r.addSheet.properties.title, id = Math.max(...Object.values(IDS)) + 1; IDS[t] = id; NAME[id] = t; S[t] = [[]]; }
       if (r.appendCells) { const t = S[NAME[r.appendCells.sheetId]]; r.appendCells.rows.forEach(row => t.push(row.values.map(v => { const x = v.userEnteredValue; return x.numberValue ?? x.stringValue; }))); }
       if (r.sortRange) { const t = S[NAME[r.sortRange.range.sheetId]]; const kopf = t.shift(); t.sort((a, b) => a[0] - b[0]); t.unshift(kopf); }
       if (r.deleteDimension) { const g = r.deleteDimension.range; S[NAME[g.sheetId]].splice(g.startIndex, g.endIndex - g.startIndex); }
@@ -208,8 +210,10 @@ const tick = (n = 3) => new Promise(r => setTimeout(r, 15 * n));
   rRow.click(); await tick();
   check('Auswertung: Reise aufklappen zeigt Buchungen', doc.querySelectorAll('.cat-detail .tx').length === 2
     && doc.querySelector('[data-aw="r:Reise Rom Apr 2026"]').getAttribute('aria-expanded') === 'true');
-  const quoteZeile = [...doc.querySelectorAll('table.tab tbody tr')].find(tr => tr.textContent.startsWith(String(y)));
-  check('Auswertung: Sparquote pro Jahr', doc.querySelectorAll('table.tab tbody tr').length === 2 && /20 %/.test(quoteZeile.textContent));
+  const sparTabelle = [...doc.querySelectorAll('#uebersicht table.tab')].find(t => /Quote/.test(t.querySelector('thead').textContent));
+  const quoteZeile = [...sparTabelle.querySelectorAll('tbody tr')].find(tr => tr.textContent.startsWith(String(y)));
+  check('Auswertung: Sparquote pro Jahr', sparTabelle.querySelectorAll('tbody tr').length === 2 && /20 %/.test(quoteZeile.textContent));
+  check('Auswertung: Einnahmen fest und variabel als Säulen', doc.querySelectorAll('.sbars .sb').length === 12 && /Fest \(regelmässig\)/.test($('#uebersicht').textContent));
   $('#jahr').value = String(y - 1); $('#jahr').dispatchEvent(new w.Event('change')); await tick(6);
   check('Auswertung Vorjahr: Sparquote als Hauptzahl, keine Reisen', /Sparquote/.test($('.hero .label').textContent) && /Keine Reisen/.test($('#uebersicht').textContent));
   $('#jahr').value = String(y); $('#jahr').dispatchEvent(new w.Event('change')); await tick(6);
@@ -380,7 +384,19 @@ const tick = (n = 3) => new Promise(r => setTimeout(r, 15 * n));
   check('Vermögen: Titel, Monate & Jahr ausgeblendet', $('#title').textContent === 'Vermögen' && $('#monate').hidden && $('#jahr').hidden);
   check('Vermögen: Netto = 1500 + 5200 − 700', $('.hero .value').textContent.replace(/\D/g, '') === '6000');
   check('Vermögen: Veränderung seit Vormonat', /▼ 0|▲|▼/.test($('.hero .vorjahr').textContent) && /Vormonat/.test($('.hero').textContent));
-  check('Vermögen: Verlauf + Tabelle', !!$('.lchart svg .linie') && doc.querySelectorAll('#uebersicht table.tab tbody tr').length === 2);
+  check('Vermögen: Verlauf + Tabelle', !!$('.lchart svg .linie') && $('.lchart').closest('.card').querySelectorAll('table.tab tbody tr').length === 2);
+  check('Vermögen: Prognose Lohnkonto mit 6 Monaten', /Lohnkonto · Prognose/.test($('#uebersicht').textContent) && doc.querySelectorAll('#uebersicht .jbars .jb').length === 6);
+  check('Vermögen: Sparziele noch leer mit «Sparziel anlegen»', /Sparziele/.test($('#uebersicht').textContent) && /Sparziel anlegen/.test($('#zuZiele').textContent));
+  $('#zuZiele').click(); await tick();
+  $('[data-neu="ziel"]').click(); await tick();
+  $('#vwName').value = 'Reserve Lohnkonto'; $('#vwBetrag').value = '2000'; $('#vwZBis').value = `${y + 1}-06`;
+  $('#vwQuelle').value = 'Konto: Lohnkonto'; $('#vwQuelle').dispatchEvent(new w.Event('change'));
+  check('Ziel-Dialog: «Seit» nur bei Kategorie', $('#vwSeitFeld').hidden);
+  $('#vwForm button[type=submit]').click(); await tick(10);
+  check('Ziel: Blatt «Ziele» angelegt, Zeile geschrieben', !!S.Ziele && S.Ziele[0][0] === 'Ziel' && JSON.stringify(S.Ziele[1]) === JSON.stringify(['Reserve Lohnkonto', 2000, `${y + 1}-06`, 'Konto: Lohnkonto', '', '']));
+  doc.querySelector('nav [data-v=uebersicht]').click(); w.eval("setAnsicht('vermoegen')"); await tick();
+  check('Vermögen: Ziel mit Fortschritt und Status', /Reserve Lohnkonto/.test($('#uebersicht').textContent) && /von 2'000/.test($('#uebersicht').textContent)
+    && /pro Monat nötig|Erreicht/.test($('#uebersicht').textContent));
   check('Vermögen: Gruppen', /Flüssig/.test($('#uebersicht').textContent) && /Schulden/.test($('#uebersicht').textContent));
   $('#vErfassen').click(); await tick();
   check('Vermögen: Dialog vorausgefüllt', $('#vdlg').open && $$('#vFelder input').length === 3 && $$('#vFelder input').some(i => i.value === '1500.00'));

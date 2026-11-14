@@ -140,13 +140,15 @@ const Daten = (() => {
     const ids = await blattIds();
     const bereiche = ['Buchungen!A2:M', 'Kategorien!A2:D', 'Regeln!A2:G', 'Einstellungen!A2:B'];
     // optionale Blätter
-    const hatR = ids['Rückstellungen'] !== undefined, hatV = ids['Vermögen'] !== undefined;
+    const hatR = ids['Rückstellungen'] !== undefined, hatV = ids['Vermögen'] !== undefined, hatZ = ids['Ziele'] !== undefined;
     if (hatR) bereiche.push('Rückstellungen!A2:E');
     if (hatV) bereiche.push('Vermögen!A2:E');
+    if (hatZ) bereiche.push('Ziele!A2:F');
     const ranges = bereiche.map(r => 'ranges=' + encodeURIComponent(r)).join('&');
     const j = await api('/values:batchGet?' + ranges + '&valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=SERIAL_NUMBER');
     const werte = j.valueRanges.map(v => v.values || []);
     const [b, k, r, e] = werte, rs = hatR ? werte[4] : [], vm = hatV ? werte[hatR ? 5 : 4] : [];
+    const zl = hatZ ? werte[4 + (hatR ? 1 : 0) + (hatV ? 1 : 0)] : [];
     const einst = {}, einstRow = {}; e.forEach((x, i) => { if (x[0]) { einst[String(x[0])] = x[1]; einstRow[String(x[0])] = i + 2; } });
     D = {
       vermoegen: vm.filter(x => x[0] && x[1] && x[3] !== '' && x[3] !== undefined)
@@ -157,6 +159,9 @@ const Daten = (() => {
       buchungen: b.map(buchungAusZeile).filter(x => x.datum),
       kategorien: k.map((x, i) => [x, i + 2]).filter(([x]) => x[0] && !String(x[0]).startsWith('Typen'))
         .map(([x, row]) => ({ row, name: str(x[0]), gruppe: str(x[1]), budget: num(x[2]), bemerkung: str(x[3]) })),
+      // Sparziele: Ziel | Betrag | Bis | Quelle («Konto: …», «Gruppe: …», «Kategorie: …») | Seit | Bemerkung
+      ziele: zl.map((x, i) => [x, i + 2]).filter(([x]) => x[0] && typeof x[1] === 'number')
+        .map(([x, row]) => ({ row, name: str(x[0]), betrag: num(x[1]), bis: x[2] ? datumAus(x[2]) : '', quelle: str(x[3]), seit: x[4] ? datumAus(x[4]) : '', bemerkung: str(x[5]) })),
       regelnRows: r, einst, einstRow, stand: Date.now()
     };
     speicher.set(K.cache, D); melde();
@@ -171,7 +176,7 @@ const Daten = (() => {
     const j = Number(jahr) || jahre[jahre.length - 1] || new Date().getFullYear();
     return { jahr: j, jahre, alle, buchungen: alle.filter(b => b.jahr === j), offen: alle.filter(b => b.status === 'prüfen'),
       kategorien: D ? D.kategorien : [], rueckstellungen: (D && D.rueckstellungen) || [], regelnRows: (D && D.regelnRows) || [],
-      einst: (D && D.einst) || {}, einstRow: (D && D.einstRow) || {},
+      einst: (D && D.einst) || {}, einstRow: (D && D.einstRow) || {}, ziele: (D && D.ziele) || [],
       vermoegen: (D && D.vermoegen) || [], hatVermoegen: !!(D && D.hatVermoegen),
       offline: !navigator.onLine, warteschlange: queue.length };
   }
@@ -280,7 +285,7 @@ const Daten = (() => {
   }
 
   /* ---------------- Stammdaten: Kategorien, Rückstellungen, Regeln ---------------- */
-  const BLATT_SPALTEN = { Kategorien: 'D', 'Rückstellungen': 'E', Regeln: 'G', Einstellungen: 'B' };
+  const BLATT_SPALTEN = { Kategorien: 'D', 'Rückstellungen': 'E', Regeln: 'G', Einstellungen: 'B', Ziele: 'F' };
   const zelleWert = v => typeof v === 'number' ? { userEnteredValue: { numberValue: v } } : { userEnteredValue: { stringValue: str(v) } };
   /**
    * Eine Zeile in Kategorien / Rückstellungen / Regeln ändern, anlegen oder löschen. Nur online.
@@ -291,7 +296,12 @@ const Daten = (() => {
     if (!BLATT_SPALTEN[blatt]) throw new Error('Unbekanntes Blatt: ' + blatt);
     if (!navigator.onLine) throw new Error('Bearbeiten geht nur online');
     await sync();
-    const ids = await blattIds();
+    let ids = await blattIds();
+    if (ids[blatt] === undefined && blatt === 'Ziele' && aktion === 'neu') {   // Blatt «Ziele» beim ersten Ziel anlegen
+      await batch([{ addSheet: { properties: { title: 'Ziele', gridProperties: { rowCount: 200, columnCount: 6, frozenRowCount: 1 } } } }]);
+      sheetIds = null; ids = await blattIds();
+      await api('/values/' + encodeURIComponent('Ziele!A1:F1') + '?valueInputOption=RAW', { method: 'PUT', body: { values: [['Ziel', 'Betrag', 'Bis', 'Quelle (Konto: … / Gruppe: … / Kategorie: …)', 'Seit', 'Bemerkung']] } });
+    }
     if (ids[blatt] === undefined) throw new Error(`Im Sheet fehlt das Blatt «${blatt}»`);
     if (aktion !== 'neu') {
       const j = await api('/values/' + encodeURIComponent(`${blatt}!A${row}`) + '?valueRenderOption=UNFORMATTED_VALUE');

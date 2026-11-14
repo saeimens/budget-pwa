@@ -87,8 +87,9 @@ function renderVermoegen() {
           <span class="num">${chf0(k.saldo)}</span></div>`; }).join('')}`).join('')}
     </div><div class="small muted" style="margin-top:var(--s2)">Kleine Zahl: Veränderung seit ${vor ? datumKurz(vor.datum) : 'dem letzten Stand'}.</div>`;
 
-  $('#uebersicht').innerHTML = hero + chart + liste;
+  $('#uebersicht').innerHTML = hero + prognoseHtml(reihe) + zieleHtml(reihe) + chart + liste;
   $('#vErfassen').onclick = () => oeffneKontostaende(reihe);
+  $('#zuZiele').onclick = () => oeffneVerwalten('ziele');
 
   // Fadenkreuz-Tooltip: rastet auf den nächsten Stichtag ein
   const hit = $('#vHit');

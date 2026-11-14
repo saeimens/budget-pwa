@@ -23,7 +23,7 @@ function renderVerwalten() {
   const el = $('#verwalten');
   if (!D) { el.innerHTML = '<div class="loading">Lade Daten …</div>'; return; }
   const knopf = (b, t) => `<button type="button" data-vw="${b}" class="${vw.bereich === b ? 'on' : ''}" aria-pressed="${vw.bereich === b}">${t}</button>`;
-  let html = `<div class="seg2 tabs" role="group" aria-label="Bereich">${knopf('budgets', 'Budgets')}${knopf('rechnungen', 'Jahresrechnungen')}${knopf('regeln', 'Regeln')}</div>
+  let html = `<div class="seg2 tabs" role="group" aria-label="Bereich">${knopf('budgets', 'Budgets')}${knopf('rechnungen', 'Jahresrechnungen')}${knopf('regeln', 'Regeln')}${knopf('ziele', 'Ziele')}</div>
     ${navigator.onLine ? '' : '<div class="hinweis" style="margin:0 0 var(--s3)">Offline: Ansehen geht, Ändern erst wieder mit Internet.</div>'}`;
 
   if (vw.bereich === 'budgets') {
@@ -47,6 +47,15 @@ function renderVerwalten() {
           <span class="row"><span class="grow name ${x.aktiv ? '' : 'muted'}">${esc(x.posten)}</span><span class="num ${x.aktiv ? '' : 'muted'}">${chf(x.rate)}</span>${ico('chev', 'chev', 18)}</span>
           <span class="small muted" style="display:block">${esc(x.kategorie || 'ohne Kategorie')}${x.aktiv ? '' : ' · <span class="pill neutral">inaktiv</span>'}${x.bemerkung ? ' · ' + esc(x.bemerkung) : ''}</span></button>`).join('')
         || '<div class="empty muted">Noch keine Posten.</div>'}</div>`;
+  } else if (vw.bereich === 'ziele') {
+    const z = D.ziele || [];
+    html += `<p class="lead" style="margin-top:0">Sparziele (Blatt «Ziele»). Der Fortschritt kommt aus einem Konto, einer Vermögensgruppe oder einer Kategorie. Anzeige im Reiter «Vermögen».</p>
+      <button type="button" class="ghost" data-neu="ziel" style="width:100%;margin-bottom:var(--s3)">${ico('plus', '', 18)} Neues Ziel</button>
+      <div class="card" style="padding-block:var(--s1)">${z.map(x => `
+        <button type="button" class="plain cat rrow" data-z="${x.row}" aria-label="${esc(x.name)}, ${chf0(x.betrag)} Franken, bearbeiten">
+          <span class="row"><span class="grow name">${esc(x.name)}</span><span class="num">${chf0(x.betrag)}</span>${ico('chev', 'chev', 18)}</span>
+          <span class="small muted" style="display:block">${esc(x.quelle || 'Quelle fehlt')}${x.bis ? ' · bis ' + esc(x.bis) : ''}</span></button>`).join('')
+        || '<div class="empty muted">Noch keine Ziele.</div>'}</div>`;
   } else {
     const alle = regelListe(), q = vw.suche.trim().toLowerCase();
     const treffer = q ? alle.filter(x => [x.suchbegriff, x.kategorie, x.notiz, x.typ].join(' ').toLowerCase().includes(q)) : alle;
@@ -69,6 +78,7 @@ function renderVerwalten() {
   $$('[data-k]', el).forEach(b => b.onclick = () => oeffneVw('kategorie', D.kategorien.find(x => x.name === b.dataset.k)));
   $$('[data-p]', el).forEach(b => b.onclick = () => oeffneVw('posten', D.rueckstellungen.find(x => x.row === +b.dataset.p)));
   $$('[data-rg]', el).forEach(b => b.onclick = () => oeffneVw('regel', regelListe().find(x => x.row === +b.dataset.rg)));
+  $$('[data-z]', el).forEach(b => b.onclick = () => oeffneVw('ziel', (D.ziele || []).find(x => x.row === +b.dataset.z)));
   if ($('#vwSuche')) $('#vwSuche').oninput = e => {
     vw.suche = e.target.value; vw.mehr = false;
     const pos = e.target.selectionStart; renderVerwalten();
@@ -102,6 +112,23 @@ function oeffneVw(art, x) {
       <div class="grid2">${feld('vwRate', 'Rate pro Monat (CHF)', x ? x.rate : '', 'inputmode="decimal"')}
         <label class="field"><span>Im Plan</span><select id="vwAktiv"><option value="ja" ${!x || x.aktiv ? 'selected' : ''}>aktiv</option><option value="nein" ${x && !x.aktiv ? 'selected' : ''}>inaktiv</option></select></label></div>
       ${feld('vwBem', 'Bemerkung (optional)', x ? x.bemerkung : '')}`;
+  } else if (art === 'ziel') {
+    titel = neu ? 'Neues Sparziel' : x.name; loeschen = !neu;
+    const reihe = typeof vermoegensReihe === 'function' && (D.vermoegen || []).length ? vermoegensReihe() : [];
+    const akt = reihe[reihe.length - 1];
+    const quellen = [].concat(
+      akt ? akt.konten.map(k => 'Konto: ' + k.konto) : [],
+      [...new Set(akt ? akt.konten.map(k => k.gruppe) : [])].map(g => 'Gruppe: ' + g),
+      [...new Set((D.alle || D.buchungen).filter(b => b.typ === 'Sparen').map(b => b.kategorie))].filter(Boolean).map(k => 'Kategorie: ' + k),
+      D.kategorien.map(k => 'Kategorie: ' + k.name));
+    const sel = x ? x.quelle : quellen[0];
+    if (sel && !quellen.includes(sel)) quellen.unshift(sel);
+    felder = `${feld('vwName', 'Ziel', x ? x.name : '', 'placeholder="z. B. Reserve Lohnkonto, 3. Säule 2027"')}
+      <div class="grid2">${feld('vwBetrag', 'Betrag (CHF)', x ? x.betrag : '', 'inputmode="decimal"')}
+        <label class="field"><span>Bis (optional)</span><input type="month" id="vwZBis" value="${esc(x && x.bis ? x.bis.slice(0, 7) : '')}"></label></div>
+      <label class="field"><span>Fortschritt aus</span><select id="vwQuelle">${[...new Set(quellen)].map(q => `<option ${q === sel ? 'selected' : ''}>${esc(q)}</option>`).join('')}</select></label>
+      <label class="field" id="vwSeitFeld"><span>Seit (bei Kategorie: ab diesem Datum zählen)</span><input type="date" id="vwSeit" value="${esc(x && x.seit ? x.seit : isoLocal(new Date(CUR_Y, 0, 1)))}"></label>
+      ${feld('vwBem', 'Bemerkung (optional)', x ? x.bemerkung : '')}`;
   } else if (art === 'reisebudget') {
     titel = 'Reisebudget pro Jahr';
     felder = `${feld('vwRb', 'Betrag pro Jahr (CHF)', x ? x.wert : '', 'inputmode="decimal" aria-describedby="vwRbHilfe"')}
@@ -125,6 +152,7 @@ function oeffneVw(art, x) {
   if ($('#vwSb')) { const zeig = () => { const n = regelTreffer($('#vwSb').value); $('#vwTreffer').textContent = $('#vwSb').value.trim() ? `Kommt in ${n} bisherigen Bank-Texten vor.` : ''; };
     $('#vwSb').oninput = zeig; zeig(); }
   if ($('#vwTyp')) { const k = () => { $('#vwKat').disabled = $('#vwTyp').value === 'Ignorieren'; }; $('#vwTyp').onchange = k; k(); }
+  if ($('#vwQuelle')) { const s = () => { $('#vwSeitFeld').hidden = !/^Kategorie:/.test($('#vwQuelle').value); }; $('#vwQuelle').onchange = s; s(); }
   $('#vwdlg').showModal();
   const erst = $('#vwFelder input:not([disabled])'); if (erst && neu) erst.focus();
 }
@@ -147,6 +175,13 @@ async function vwSpeichern(e) {
     if (rate === '' || Number.isNaN(rate) || rate < 0) { markInvalid($('#vwRate')); return toast('Bitte eine gültige Rate pro Monat eingeben'); }
     blatt = 'Rückstellungen'; werte = [v('vwName'), v('vwKat'), rate, v('vwAktiv'), v('vwBem')]; erwartet = neu ? '' : x.posten;
     if (neu) row = Math.max(1, ...(D.rueckstellungen || []).map(p => p.row));
+  } else if (art === 'ziel') {
+    const betrag = zahlOderLeer(v('vwBetrag'));
+    if (!v('vwName')) { markInvalid($('#vwName')); return toast('Bitte das Ziel benennen'); }
+    if (betrag === '' || Number.isNaN(betrag) || betrag <= 0) { markInvalid($('#vwBetrag')); return toast('Bitte einen Zielbetrag eingeben'); }
+    const kat = /^Kategorie:/.test(v('vwQuelle'));
+    blatt = 'Ziele'; werte = [v('vwName'), betrag, v('vwZBis'), v('vwQuelle'), kat ? v('vwSeit') : '', v('vwBem')]; erwartet = neu ? '' : x.name;
+    if (neu) row = Math.max(1, ...(D.ziele || []).map(z => z.row));
   } else if (art === 'reisebudget') {
     const n = zahlOderLeer(v('vwRb'));
     if (Number.isNaN(n) || n < 0) { markInvalid($('#vwRb')); return toast('Bitte einen gültigen Betrag eingeben'); }
@@ -181,8 +216,10 @@ async function vwAusfuehren(blatt, aktion, row, werte, erwartet, meldung) {
 $('#vwForm').onsubmit = vwSpeichern;
 $('#vwDel').onclick = async () => {
   const { art, x } = vw.ziel; if (!x) return;
-  const blatt = art === 'posten' ? 'Rückstellungen' : 'Regeln', erwartet = art === 'posten' ? x.posten : x.suchbegriff;
+  const blatt = { posten: 'Rückstellungen', ziel: 'Ziele' }[art] || 'Regeln';
+  const erwartet = art === 'posten' ? x.posten : art === 'ziel' ? x.name : x.suchbegriff;
   const alt = art === 'posten' ? [x.posten, x.kategorie, x.rate, x.aktiv ? 'ja' : 'nein', x.bemerkung]
+    : art === 'ziel' ? [x.name, x.betrag, x.bis, x.quelle, x.seit, x.bemerkung]
     : [x.suchbegriff, x.richtung, x.typ, x.kategorie, x.faktor, x.bis, x.notiz];
   if (!await vwAusfuehren(blatt, 'loeschen', x.row, [], erwartet)) return;
   // Rückgängig statt Rückfrage: Zeile an derselben Stelle wieder einfügen
