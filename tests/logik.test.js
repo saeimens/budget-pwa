@@ -220,7 +220,7 @@ test('Wiederkehrend: zwei Zahlungen im Jahresabstand nur bei Abos; Ausgeblendete
   const namen = r => r.map(w => w.name).sort();
   assert.deepStrictEqual(namen(L.wiederkehrend(l, '2026-12-05')), ['Magazin, Abo', 'Versicherung X']);
   const opts = { abo: k => k === 'Software & KI-Abos', aus: new Set(['Rückstellung|Rechtsschutz|Versicherung X']) };
-  assert.deepStrictEqual(namen(L.wiederkehrend(l, '2026-12-05', undefined, opts)), ['Passwortdienst', 'Magazin, Abo']);
+  assert.deepStrictEqual(namen(L.wiederkehrend(l, '2026-12-05', undefined, opts)), ['Magazin, Abo', 'Passwortdienst']);
 });
 
 test('Monate addieren: Monatsende', () => {
