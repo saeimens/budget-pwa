@@ -5,7 +5,7 @@
 const MONATE = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
 const MONATE_LANG = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
 const TYPEN = [['Ausgabe','Ausgabe'], ['Einnahme','Einnahme'], ['Rückstellung','Jahresrechnung (Rückstellung)'], ['Sparen','Sparen']];
-const KONTEN = ['Bar','Twint','Karte','Kreditkarte','Wise'];
+const KONTEN = ['Bar','Twint','Karte','Kreditkarte','Wise','Neon'];
 const VIEW_TITEL = { pruefen:'Zu prüfen', import:'Import', suche:'Suche', erfassen:'Erfassen', verwalten:'Budgets & Regeln' };
 const HEUTE = new Date(), CUR_Y = HEUTE.getFullYear(), CUR_M = HEUTE.getMonth() + 1;
 
