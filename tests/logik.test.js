@@ -38,6 +38,14 @@ test('UBS-Konto: Lohnkonto, Regeln, Faktor, Betragsgrenze, Ignorieren, unbekannt
   assert.deepStrictEqual(r.saldo, { konto: 'Lohnkonto', datum: '2026-10-31', betrag: 1234.5 });
 });
 
+test('UBS-Konto: weitere Konten über «IBAN-Teil <Name>», ohne Treffer Lohnkonto', () => {
+  const einst = { 'IBAN-Teil Rückstellungskonto': 'XX99', 'IBAN-Teil Assistenzkonto': 'AB 12' };
+  const a = L.auswerten(ubsKonto('CH00 2222 AB12 Q', [['2026-10-01', '-80.00', '', 'T7', 'Schwimmlektion']]), 'a.csv', { ...leer, einst });
+  assert.strictEqual(a.format, 'UBS Assistenzkonto'); assert.strictEqual(a.neu[0].konto, 'Assistenzkonto');
+  const l = L.auswerten(ubsKonto('CH00 3333 ZZ00 Q', [['2026-10-01', '-5.00', '', 'T8', 'x']]), 'l.csv', { ...leer, einst });
+  assert.strictEqual(l.format, 'UBS Lohnkonto');
+});
+
 test('UBS-Konto: Rückstellungskonto über IBAN-Teil aus den Einstellungen', () => {
   const r = L.auswerten(ubsKonto('CH00 1111 XX99 Q', [['2026-10-01', '-1.00', '', 'T9', 'x']]), 'r.csv', { ...leer, einst: { 'IBAN-Teil Rückstellungskonto': 'XX 99' } });
   assert.strictEqual(r.format, 'UBS Rückstellungskonto');

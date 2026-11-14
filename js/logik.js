@@ -33,8 +33,10 @@ const Logik = (() => {
   function parseUbsKonto(text, einst) {
     const lines = text.split(/\r?\n/);
     const kontoLine = (lines.find(l => l.startsWith('IBAN:')) || '').replace(/\s/g, '');
-    const teil = String(einst['IBAN-Teil Rückstellungskonto'] || '').replace(/\s/g, '');
-    const kontoName = teil && kontoLine.includes(teil) ? 'Rückstellungskonto' : 'Lohnkonto';
+    // Kontoname aus den Einstellungen «IBAN-Teil <Name>» (z. B. Rückstellungskonto, Assistenzkonto); sonst Lohnkonto
+    const treffer = Object.keys(einst || {}).map(k => k.match(/^IBAN-Teil\s+(.+)$/)).filter(Boolean)
+      .find(m => { const teil = String(einst[m[0]] || '').replace(/\s/g, ''); return teil && kontoLine.replace(/\s/g, '').includes(teil); });
+    const kontoName = treffer ? treffer[1].trim() : 'Lohnkonto';
     const start = lines.findIndex(l => l.startsWith('Abschlussdatum;'));
     const data = parseCsv(lines.slice(start).join('\n'), ';');
     const h = data[0], ix = n => h.indexOf(n);
