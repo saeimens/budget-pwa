@@ -190,3 +190,47 @@ $('#vwDel').onclick = async () => {
 };
 $('#vwClose').onclick = () => $('#vwdlg').close();
 $('#vwdlg').addEventListener('click', e => { if (e.target === $('#vwdlg')) $('#vwdlg').close(); });
+
+/* ---------- «+ Neue Reise …» in jeder Kategorien-Auswahl ---------- */
+let reiseZiel = null;   // die Auswahl, in der «Neue Reise» gewählt wurde
+const reiseName = () => {
+  const ort = $('#rOrt').value.trim().replace(/\s+/g, ' '), mon = $('#rMonat').value, jahr = $('#rJahr').value.trim();
+  return ort ? `Reise ${ort}${mon ? ' ' + mon : ''}${jahr ? ' ' + jahr : ''}` : '';
+};
+const reiseVorschau = () => { $('#rVorschau').textContent = reiseName() ? `«${reiseName()}»` : '…'; };
+document.addEventListener('focusin', e => { if (e.target.tagName === 'SELECT') e.target.dataset.vorher = e.target.value; });
+document.addEventListener('change', e => {
+  const s = e.target;
+  if (s.tagName !== 'SELECT' || s.value !== NEUE_REISE) return;
+  reiseZiel = s; s.value = s.dataset.vorher && s.dataset.vorher !== NEUE_REISE ? s.dataset.vorher : '';
+  $('#rOrt').value = ''; $('#rJahr').value = String(CUR_Y);
+  $('#rMonat').innerHTML = '<option value="">ohne Monat</option>' + MONATE.map((m, i) => `<option value="${m}" ${i + 1 === CUR_M ? 'selected' : ''}>${MONATE_LANG[i]}</option>`).join('');
+  $$('#reiseForm button').forEach(b => b.disabled = false);
+  reiseVorschau();
+  $('#reisedlg').showModal(); $('#rOrt').focus();
+});
+['#rOrt', '#rJahr'].forEach(id => $(id).addEventListener('input', reiseVorschau));
+$('#rMonat').addEventListener('change', reiseVorschau);
+$('#reiseClose').onclick = () => $('#reisedlg').close();
+$('#reisedlg').addEventListener('click', e => { if (e.target === $('#reisedlg')) $('#reisedlg').close(); });
+$('#reiseForm').onsubmit = async e => {
+  e.preventDefault();
+  const name = reiseName(), jahr = $('#rJahr').value.trim();
+  if (!$('#rOrt').value.trim()) { markInvalid($('#rOrt')); return toast('Bitte den Ort eingeben'); }
+  if (jahr && !/^20\d\d$/.test(jahr)) { markInvalid($('#rJahr')); return toast('Bitte ein Jahr wie 2027 eingeben'); }
+  if (D.kategorien.some(k => k.name.toLowerCase() === name.toLowerCase())) { markInvalid($('#rOrt')); return toast('Diese Reise gibt es schon'); }
+  const reisen = D.kategorien.filter(k => k.gruppe === 'Reisen');
+  const row = Math.max(1, ...(reisen.length ? reisen : D.kategorien).map(k => k.row));
+  $$('#reiseForm button').forEach(b => b.disabled = true);
+  try {
+    await call('blattAendern', 'Kategorien', 'neu', row, [name, 'Reisen', 0, ''], '');
+    $('#reisedlg').close();
+    anzeigen(Daten.getDataSync(D.jahr));
+    if (reiseZiel) {
+      const leer = reiseZiel.options[0] ? reiseZiel.options[0].text : undefined;
+      reiseZiel.innerHTML = katOpts(name, leer, { neueReise: true });
+      reiseZiel.value = name; reiseZiel.dispatchEvent(new Event('change', { bubbles: true })); reiseZiel.focus();
+    }
+    toast(`«${name}» angelegt`);
+  } catch (err) { fehler('Anlegen', err); $$('#reiseForm button').forEach(b => b.disabled = false); }
+};

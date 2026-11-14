@@ -186,7 +186,8 @@ const Daten = (() => {
   async function search(q, jahr, kategorie) {
     const needle = String(q || '').toLowerCase().trim();
     return (D ? D.buchungen : []).filter(b =>
-      (!jahr || b.jahr === Number(jahr)) && (!kategorie || b.kategorie === kategorie) &&
+      (!jahr || b.jahr === Number(jahr)) &&
+      (!kategorie || (kategorie === '__reisen__' ? /^Reise\s/.test(b.kategorie || '') : b.kategorie === kategorie)) &&
       (!needle || [b.notiz, b.kategorie, b.banktext, b.konto].join(' ').toLowerCase().includes(needle))
     ).slice(-500).reverse();
   }

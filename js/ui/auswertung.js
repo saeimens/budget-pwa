@@ -3,7 +3,6 @@
 
 /* ---------- Auswertung ---------- */
 let offenAw = null;   // aufgeklappte Zeile: 'e:<Kategorie>' oder 'r:<Reise>'
-const IST_REISE = k => /^Reise\s/.test(k || '');
 
 function awVeraenderung(a, b) {
   if (!a) return b ? '<span class="delta neutral">neu</span>' : '';
@@ -28,6 +27,20 @@ function awPrognose(alle) {
   const rest = 12 - CUR_M + (tageImMonat - HEUTE.getDate()) / tageImMonat;
   const prognose = bisher + schnitt * rest;
   return { bisher, reisen, schnitt, rest, prognose, ohneReisen: prognose - reisen, budget: D.kategorien.reduce((a, k) => a + k.budget, 0) * 12 };
+}
+
+// Säulen: grosse Reisen pro Jahr (ein Farbton, gezeigtes Jahr kräftiger), Reisebudget als gestrichelte Linie – eine Achse (CHF)
+function reiseVerlauf(reiseJahre, rBudget, jahr) {
+  const max = Math.max(1, rBudget, ...reiseJahre.map(x => x.s)), H = 110;
+  const kurz = v => v >= 10000 ? (v / 1000).toLocaleString('de-CH', { maximumFractionDigits: 1 }) + 'K' : chf0(v);
+  return `<h2 class="section">Grosse Reisen pro Jahr</h2><div class="card">
+    <div class="jbars" style="height:${H + 48}px" role="img" aria-label="Grosse Reisen pro Jahr: ${reiseJahre.map(x => `${x.j} ${chf0(x.s)} Franken`).join(', ')}${rBudget ? `; Reisebudget ${chf0(rBudget)} Franken pro Jahr` : ''}">
+      ${reiseJahre.map(x => `<div class="jb ${x.j === jahr ? 'on' : ''}" title="${x.j}${x.j === CUR_Y ? ' (bis heute)' : ''}: ${chf0(x.s)} CHF">
+        <span class="jbar" style="height:${Math.max(2, Math.max(0, x.s) / max * H)}px"></span><span class="jx">${x.j}${x.j === CUR_Y ? '*' : ''}</span><span class="jv">${kurz(x.s)}</span></div>`).join('')}
+      ${rBudget ? `<div class="jlimit" style="bottom:${36 + rBudget / max * H}px" aria-hidden="true"><span>Reisebudget ${chf0(rBudget)}</span></div>` : ''}
+    </div>
+    <div class="small muted" style="margin-top:var(--s2)">Kategorien, die mit «Reise » beginnen, im Jahr der Zahlung${reiseJahre.some(x => x.j === CUR_Y) ? ` · * ${CUR_Y} bis heute` : ''}.
+      «Reisen &amp; Ausflüge» ist nicht dabei, die Kategorie hat ihr eigenes Monatsbudget.</div></div>`;
 }
 
 function renderAuswertung() {
@@ -119,8 +132,7 @@ function renderAuswertung() {
           <span class="small muted">${zeitraum(rJ[n])} · ${rJ[n].length} Buchung${rJ[n].length === 1 ? '' : 'en'}</span>
         </button>${offen ? `<div class="cat-detail">${txList(rJ[n].slice().sort((a, b) => b.datum.localeCompare(a.datum)))}</div>` : ''}</div>`; }).join('')
       : `<div class="empty muted">Keine Reisen in ${jahr}.</div>`}</div>
-    ${reiseJahre.length ? `<div class="small muted" style="margin-top:var(--s2)">Reisen pro Jahr: ${reiseJahre.map(x => `${x.j} <b class="num">${chf0(x.s)}</b>`).join(' · ')}.
-      Gezählt werden Kategorien, die mit «Reise » beginnen, im Jahr der Zahlung.</div>` : ''}`;
+    ${reiseJahre.length ? reiseVerlauf(reiseJahre, rBudget, jahr) : ''}`;
 
   $('#uebersicht').innerHTML = `<div style="margin-top:var(--s3)">${hero}</div>${einnahmen}${reisen}${sparTab}`;
   $$('#uebersicht [data-aw]').forEach(b => b.onclick = () => { offenAw = offenAw === b.dataset.aw ? null : b.dataset.aw; renderAuswertung(); });

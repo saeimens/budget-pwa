@@ -171,6 +171,27 @@ body.busy .busybar { opacity:1; }
    Mit dem Dataviz-Validator geprüft (--ordinal, hell auf #ffffff, dunkel auf #1f1f1d). */
 :root { --vj:#6fc19c; --j:#1d7a57; }
 @media (prefers-color-scheme: dark) { :root { --vj:#2f7d5f; --j:#7fd3ad; } }
+
+/* Kategoriale Reihe (feste Reihenfolge, Farbe folgt der Gruppe): Dataviz-Referenzpalette,
+   mit dem Validator geprüft auf #ffffff (hell) und #1f1f1d (dunkel). --serie-0 = «Übrige». */
+:root { --serie-0:#a19e96; --serie-1:#2a78d6; --serie-2:#eb6834; --serie-3:#1baf7a; --serie-4:#eda100;
+  --serie-5:#e87ba4; --serie-6:#008300; --serie-7:#6250d6; --serie-8:#e34948; }
+@media (prefers-color-scheme: dark) { :root { --serie-0:#6b6963; --serie-1:#3987e5; --serie-2:#d95926; --serie-3:#199e70;
+  --serie-4:#c98500; --serie-5:#d55181; --serie-6:#0ca30c; --serie-7:#9085e9; --serie-8:#e66767; } }
+.segbar { display:flex; gap:2px; height:8px; border-radius:99px; overflow:hidden; margin:var(--s1) 0 var(--s2); }
+.segbar > span { min-width:2px; }
+.sw { display:inline-block; flex:none; width:10px; height:10px; border-radius:3px; margin-right:var(--s2); }
+.gfrow .name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.gfrow .gfpct { flex:none; width:44px; text-align:right; }
+.gfrow .gfbetrag { flex:none; min-width:64px; text-align:right; }
+.jbars { position:relative; display:flex; align-items:flex-end; gap:var(--s3); margin-top:var(--s2); }
+.jb { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; }
+.jbar { display:block; width:min(36px, 60%); background:var(--vj); border-radius:4px 4px 0 0; }
+.jb.on .jbar { background:var(--j); }
+.jx, .jv { display:block; height:18px; line-height:18px; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
+.jb.on .jx, .jb.on .jv { color:var(--ink); font-weight:600; }
+.jlimit { position:absolute; left:0; right:0; border-top:2px dashed var(--muted); pointer-events:none; }
+.jlimit span { position:absolute; left:0; top:-20px; font-size:12px; color:var(--muted); background:var(--surface); padding-right:4px; }
 .cmp-ctrl { display:flex; flex-wrap:wrap; align-items:center; gap:var(--s2); margin-top:var(--s3); }
 .cmp-ctrl select { width:auto; min-height:40px; padding-block:6px; }
 .cmp-ctrl .vs { color:var(--muted); font-size:14px; }

@@ -194,6 +194,23 @@
   </div>
 </div>
 
+<!-- Neue Reise (Kategorie «Reise <Ort> <Monat Jahr>») -->
+<dialog id="reisedlg" aria-labelledby="reiseTitel">
+  <form id="reiseForm" class="stack" novalidate>
+    <div class="row" style="align-items:flex-start">
+      <b id="reiseTitel" class="grow" style="font-size:18px">Neue Reise</b>
+      <button type="button" class="icon-btn" id="reiseClose" aria-label="Schliessen"><span data-ico="x"></span></button>
+    </div>
+    <label class="field"><span>Ort</span><input type="text" id="rOrt" placeholder="z. B. Rom, London, Curaçao" autocomplete="off"></label>
+    <div class="grid2">
+      <label class="field"><span>Monat</span><select id="rMonat"></select></label>
+      <label class="field"><span>Jahr</span><input type="text" id="rJahr" inputmode="numeric" maxlength="4" autocomplete="off"></label>
+    </div>
+    <div class="small muted" aria-live="polite">Wird zur Kategorie <b id="rVorschau"></b></div>
+    <button type="submit" style="width:100%">Reise anlegen</button>
+  </form>
+</dialog>
+
 <!-- Einstellungen -->
 <dialog id="edlg" aria-labelledby="edlgTitel">
   <div class="stack" style="padding:var(--s4) var(--s4) var(--s5)">

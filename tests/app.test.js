@@ -287,6 +287,45 @@ const tick = (n = 3) => new Promise(r => setTimeout(r, 15 * n));
   S.Einstellungen = JSON.parse(einstVorher); S.Buchungen.splice(S.Buchungen.findIndex(r => r[12] === 'rb1'), 1);
   w.eval("setAnsicht('budget')");
 
+  // Reisen: eine Zeile im Budget, gegliederte Auswahl, «+ Neue Reise …», «Alle Reisen» in der Suche, Diagramme
+  S.Kategorien.splice(S.Kategorien.length - 1, 0, ['Reise Wien 2024', 'Reisen', 0], ['Reise Rom Mai 2026', 'Reisen', 0]);
+  S.Buchungen.push([ser(`${y}-${String(mo).padStart(2, '0')}-03`), y, mo, 'Ausgabe', 1500, 'Reise Rom Mai 2026', 'Hotel Rom', 'Karte', 'HOTEL', 'Import', 'ok', '', 'rs1']);
+  S.Buchungen.push([ser('2024-05-10'), 2024, 5, 'Ausgabe', 900, 'Reise Wien 2024', 'Hotel Wien', 'Karte', 'HOTEL W', 'Import', 'ok', '', 'rs2']);
+  await w.eval('load(null)'); await tick(6);
+  doc.querySelector('nav [data-v=uebersicht]').click(); w.eval("setAnsicht('budget')"); await tick();
+  const rz = doc.querySelector('#kats [data-k="__reisen__"]');
+  check('Budget: alle Reisen als eine Zeile «Grosse Reisen»', !!rz && /Grosse Reisen/.test(rz.textContent) && /1'500/.test(rz.textContent)
+    && !doc.querySelector('#kats [data-k="Reise Rom Mai 2026"]'));
+  rz.click(); await tick();
+  check('Budget: «Grosse Reisen» aufgeklappt zeigt die Reise', /Rom Mai 2026/.test($('#kats .cat-detail').textContent));
+  check('Budget: «Wohin das Geld geht» mit Balken und Gruppen', /Wohin das Geld geht/.test($('#uebersicht').textContent)
+    && doc.querySelectorAll('.segbar > span').length >= 2 && !!doc.querySelector('[data-gf="Reisen"]') && !!doc.querySelector('[data-gf="Alltag"]'));
+  doc.querySelector('[data-gf="Alltag"]').click(); await tick();
+  check('Budget: Gruppe aufklappen zeigt Kategorien', /Lebensmittel/.test(doc.querySelector('[data-gf="Alltag"]').closest('.rrow-wrap').textContent));
+  w.eval("setView('erfassen')"); await tick();
+  const og = l => [...$('#eKat').querySelectorAll('optgroup')].find(g => g.label === l);
+  check('Auswahl: nach Gruppen, aktuelle Reise oben, frühere unten, «Neue Reise»', !!og('Alltag') && og('Reisen').textContent.includes('Reise Rom Mai 2026')
+    && !og('Reisen').textContent.includes('Wien') && og('Frühere Reisen').textContent.includes('Reise Wien 2024')
+    && !!og('Reisen').querySelector('option[value="__neue_reise__"]'));
+  $('#eKat').value = '__neue_reise__'; $('#eKat').dispatchEvent(new w.Event('change', { bubbles: true })); await tick();
+  check('Neue Reise: Dialog offen, Auswahl zurückgesetzt', $('#reisedlg').open && $('#eKat').value !== '__neue_reise__');
+  $('#rOrt').value = 'Lissabon'; $('#rOrt').dispatchEvent(new w.Event('input')); $('#rMonat').value = 'Jun'; $('#rMonat').dispatchEvent(new w.Event('change'));
+  $('#rJahr').value = '2027'; $('#rJahr').dispatchEvent(new w.Event('input'));
+  check('Neue Reise: Vorschau des Namens', /Reise Lissabon Jun 2027/.test($('#rVorschau').textContent));
+  $('#reiseForm button[type=submit]').click(); await tick(8);
+  const iL = S.Kategorien.findIndex(r => r[0] === 'Reise Lissabon Jun 2027');
+  check('Neue Reise: im Blatt nach den Reisen angelegt und gewählt', iL > 0 && S.Kategorien[iL][1] === 'Reisen' && S.Kategorien[iL - 1][0] === 'Reise Rom Mai 2026'
+    && !$('#reisedlg').open && $('#eKat').value === 'Reise Lissabon Jun 2027');
+  w.eval("setView('suche')"); await tick(4);
+  $('#qKat').value = '__reisen__'; $('#qKat').dispatchEvent(new w.Event('change')); await tick(6);
+  check('Suche: «Alle Reisen» findet alle Reisen', /Hotel Rom/.test($('#sucheResult').textContent) && /Hotel Wien/.test($('#sucheResult').textContent)
+    && !/Migros/.test($('#sucheResult').textContent));
+  $('#qKat').value = ''; $('#qKat').dispatchEvent(new w.Event('change')); await tick(4);
+  doc.querySelector('nav [data-v=uebersicht]').click(); w.eval("setAnsicht('auswertung')"); await tick();
+  check('Auswertung: Säulen «Grosse Reisen pro Jahr»', doc.querySelectorAll('.jbars .jb').length === 2 && /Grosse Reisen pro Jahr/.test($('#uebersicht').textContent));
+  w.eval("setAnsicht('budget')");
+  S.Buchungen = S.Buchungen.filter(r => !['rs1', 'rs2'].includes(r[12]));
+
   const zurueck = JSON.parse(sicher); S.Kategorien = zurueck.k; S.Regeln = zurueck.r; S['Rückstellungen'] = zurueck.p;
   await w.eval('load(null)'); await tick(6);
   doc.querySelector('nav [data-v=uebersicht]').click(); await tick();

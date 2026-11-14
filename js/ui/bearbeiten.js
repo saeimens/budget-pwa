@@ -11,7 +11,7 @@ function openEdit(b) {
   $('#edMeta').textContent = [fmtDate(b.datum), b.konto, b.quelle].filter(Boolean).join(' · ');
   $('#edBank').textContent = b.banktext; $('#edBank').hidden = !b.banktext;
   $('#edTyp').innerHTML = typOpts(b.typ);
-  $('#edKat').innerHTML = katOpts(b.kategorie);
+  $('#edKat').innerHTML = katOpts(b.kategorie, undefined, { neueReise: true });
   $('#edBetrag').value = b.betrag.toFixed(2);
   $('#edNotiz').value = b.notiz;
   renderTagChips($('#edTags'), steuerVon(b));

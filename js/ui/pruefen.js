@@ -56,7 +56,7 @@ function renderPruefen() {
       Vorschlag: ${esc(vs.kategorie || vs.typ)} – wie ${vs.n} frühere Buchung${vs.n === 1 ? '' : 'en'}</div>` : '';
   const felder = (typ, kat) => `<div class="grid2">
       <label class="field"><span>Typ</span><select class="pTyp">${typOpts(typ)}</select></label>
-      <label class="field"><span class="pKatLabel">Kategorie</span><select class="pKat">${katOpts(kat)}</select></label></div>`;
+      <label class="field"><span class="pKatLabel">Kategorie</span><select class="pKat">${katOpts(kat, undefined, { neueReise: true })}</select></label></div>`;
   const regel = begriff => `<label class="check"><input type="checkbox" class="pRegel"> Als Regel für künftige Importe merken</label>
       <label class="field pRegelFeld" hidden><span>Suchbegriff (muss im Banktext vorkommen)</span>
         <input type="text" class="pBegriff" value="${esc(begriff)}"></label>`;

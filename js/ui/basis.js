@@ -51,11 +51,34 @@ const ico = (n, cls = '', size = 22) => `<svg class="ico ${cls}" viewBox="0 0 24
 $$('[data-ico]').forEach(el => el.innerHTML = ico(el.dataset.ico, '', el.closest('.drop, .sperre-ico') ? 32 : 22));
 
 const typOpts = sel => TYPEN.map(([v, l]) => `<option value="${v}" ${v === sel ? 'selected' : ''}>${l}</option>`).join('');
-function katOpts(sel, leer = 'Kategorie wählen …') {
-  const namen = D ? D.kategorien.map(k => k.name) : [];
-  if (sel && !namen.includes(sel)) namen.push(sel);
+/* Reisen: jede grössere Reise hat eine eigene Kategorie «Reise <Ort> <Monat Jahr>» */
+const IST_REISE = k => /^Reise\s/.test(k || '');
+const NEUE_REISE = '__neue_reise__', ALLE_REISEN = '__reisen__';
+// aktuell = Buchung in den letzten 6 Monaten, Jahr im Namen ab heute oder noch ohne Buchung (geplant)
+function reiseAktuell(name) {
+  const j = (String(name).match(/\b(20\d\d)\b/) || [])[1];
+  if (j && +j >= CUR_Y) return true;
+  const grenze = isoLocal(new Date(CUR_Y, CUR_M - 7, HEUTE.getDate()));
+  const l = ((D && (D.alle || D.buchungen)) || []).filter(b => b.kategorie === name);
+  return !l.length || l.some(b => b.datum >= grenze);
+}
+/** Kategorien-Auswahl, nach Gruppen gegliedert; frühere Reisen am Schluss. opt: { neueReise, alleReisen } */
+function katOpts(sel, leer = 'Kategorie wählen …', opt = {}) {
+  const kats = D ? D.kategorien.slice() : [];
+  if (sel && sel !== ALLE_REISEN && !kats.some(k => k.name === sel)) kats.push({ name: sel, gruppe: IST_REISE(sel) ? 'Reisen' : 'Übrige' });
+  const o = n => `<option value="${esc(n)}" ${n === sel ? 'selected' : ''}>${esc(n)}</option>`;
+  const gruppen = [], frueher = [];
+  kats.forEach(k => {
+    if (IST_REISE(k.name) && !reiseAktuell(k.name) && k.name !== sel) { frueher.push(k.name); return; }
+    const g = k.gruppe || (IST_REISE(k.name) ? 'Reisen' : 'Übrige');
+    let e = gruppen.find(x => x.g === g); if (!e) gruppen.push(e = { g, n: [] });
+    e.n.push(k.name);
+  });
+  if (opt.neueReise && !gruppen.some(x => x.g === 'Reisen')) gruppen.push({ g: 'Reisen', n: [] });
   return `<option value="">${esc(leer)}</option>` +
-    namen.map(n => `<option value="${esc(n)}" ${n === sel ? 'selected' : ''}>${esc(n)}</option>`).join('');
+    (opt.alleReisen ? `<option value="${ALLE_REISEN}" ${sel === ALLE_REISEN ? 'selected' : ''}>Alle Reisen</option>` : '') +
+    gruppen.map(x => `<optgroup label="${esc(x.g)}">${x.n.map(o).join('')}${opt.neueReise && x.g === 'Reisen' ? `<option value="${NEUE_REISE}">+ Neue Reise …</option>` : ''}</optgroup>`).join('') +
+    (frueher.length ? `<optgroup label="Frühere Reisen">${frueher.map(o).join('')}</optgroup>` : '');
 }
 function markInvalid(el) {
   el.classList.add('invalid'); el.focus();
@@ -133,8 +156,8 @@ function anzeigen(data, opts = {}) {
   $('#jahr').innerHTML = jahre.map(j => `<option ${j === D.jahr ? 'selected' : ''}>${j}</option>`).join('');
   const qJ = $('#qJahr').value, qK = $('#qKat').value, eK = $('#eKat').value;
   $('#qJahr').innerHTML = '<option value="">Alle Jahre</option>' + jahre.map(j => `<option ${String(j) === qJ ? 'selected' : ''}>${j}</option>`).join('');
-  $('#qKat').innerHTML = katOpts(qK, 'Alle Kategorien');
-  $('#eKat').innerHTML = katOpts(eK);
+  $('#qKat').innerHTML = katOpts(qK, 'Alle Kategorien', { alleReisen: true });
+  $('#eKat').innerHTML = katOpts(eK, undefined, { neueReise: true });
   renderTitle(); renderMonate(); renderUebersicht(); renderBadge();
   if (view === 'pruefen' && !opts.pruefen) pruefenStale = true; else renderPruefen();
 }

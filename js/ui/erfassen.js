@@ -4,7 +4,7 @@
 /* ---------- Erfassen ---------- */
 $('#eDatum').value = isoLocal(HEUTE);
 $('#eTyp').innerHTML = typOpts('Ausgabe');
-$('#eKat').innerHTML = katOpts('');
+$('#eKat').innerHTML = katOpts('', undefined, { neueReise: true });
 $('#eKonto').innerHTML = KONTEN.map(k => `<option>${k}</option>`).join('');
 if (KONTEN.includes(store.get('konto'))) $('#eKonto').value = store.get('konto');
 $('#eTyp').onchange = () => katLabel($('#eTyp').value, $('#eKatLabel'));

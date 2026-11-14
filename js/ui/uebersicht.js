@@ -101,8 +101,14 @@ function renderUebersicht() {
   // Kategorien: Ist vs. Budget
   const perKat = {};
   AUS.forEach(b => { const k = b.kategorie || '(ohne)'; perKat[k] = (perKat[k] || 0) + b.betrag; });
-  KATS = D.kategorien.map(k => ({ name:k.name, ist:perKat[k.name] || 0, budget:k.budget * anzMonate }))
-    .concat(Object.keys(perKat).filter(n => !D.kategorien.some(k => k.name === n)).map(n => ({ name:n, ist:perKat[n], budget:0 })))
+  const fluss = geldflussHtml(AUS, rue, spa, monat === 0 ? `im Jahr ${D.jahr}` : `im ${MONATE_LANG[monat - 1]}`);
+
+  // alle Reisen («Reise …») als eine Zeile, aufklappbar
+  const reiseKats = Object.keys(perKat).filter(IST_REISE);
+  KATS = D.kategorien.filter(k => !IST_REISE(k.name)).map(k => ({ name:k.name, ist:perKat[k.name] || 0, budget:k.budget * anzMonate }))
+    .concat(Object.keys(perKat).filter(n => !IST_REISE(n) && !D.kategorien.some(k => k.name === n)).map(n => ({ name:n, ist:perKat[n], budget:0 })))
+    .concat(reiseKats.length ? [{ name:ALLE_REISEN, label:'Grosse Reisen', reisen:reiseKats.map(n => ({ n, s:perKat[n] })).sort((a, b) => b.s - a.s),
+      ist:reiseKats.reduce((a, n) => a + perKat[n], 0), budget:0 }] : [])
     .filter(k => k.ist !== 0 || k.budget > 0)
     .sort((a, b) => b.ist - a.ist);
 
@@ -114,7 +120,7 @@ function renderUebersicht() {
       ${neueste.length > 5 ? `<button type="button" class="ghost klein" id="neuMehr" style="width:100%;margin:var(--s2) 0" aria-expanded="${alleNeuesten}">
         ${alleNeuesten ? 'Weniger anzeigen' : `Alle ${neueste.length} Buchungen ${zeitraum} anzeigen`}</button>` : ''}</div>` : '';
 
-  $('#uebersicht').innerHTML = `${abschlussKarte()}${hero}${stats}${neu}${chart}
+  $('#uebersicht').innerHTML = `${abschlussKarte()}${hero}${stats}${fluss}${neu}${chart}
     <h2 class="section">Kategorien <span style="font-weight:400">· antippen für Details</span></h2>
     <div class="card" style="padding-block:var(--s1)" id="kats"></div>
     <button type="button" class="ghost klein" id="zuBudgets" style="margin-top:var(--s2)">Budgets bearbeiten</button>
@@ -128,6 +134,42 @@ function renderUebersicht() {
   $('#zuBudgets').onclick = () => oeffneVerwalten('budgets');
   if ($('#neuMehr')) $('#neuMehr').onclick = () => { alleNeuesten = !alleNeuesten; renderUebersicht(); if (!alleNeuesten) $('#neuMehr').scrollIntoView({ block:'nearest' }); };
   $$('.chart .c').forEach(el => el.onclick = () => waehleMonat(+el.dataset.m));
+  $$('#uebersicht [data-gf]').forEach(b => b.onclick = () => { offeneGruppe = offeneGruppe === b.dataset.gf ? null : b.dataset.gf; renderUebersicht(); });
+}
+
+/* «Wohin das Geld geht»: dünner segmentierter Balken (Teile in fester Farbreihenfolge) + Liste mit Beträgen.
+   Farbe folgt der Gruppe, nie dem Rang; kleine Gruppen landen unter «Übrige». */
+const SERIE = { Wohnen:1, Alltag:2, Freizeit:3, Reisen:4, Jahresrechnungen:5, Sparen:6, Abos:7, Gesundheit:8 };
+let offeneGruppe = null;
+function geldflussHtml(aus, rue, spa, zeitraum) {
+  const gruppeVon = {}; D.kategorien.forEach(k => gruppeVon[k.name] = k.gruppe);
+  const g = {};
+  const dazu = (gruppe, b) => {
+    const n = SERIE[gruppe] ? gruppe : 'Übrige', k = b.kategorie || '(ohne Kategorie)';
+    const e = g[n] = g[n] || { s: 0, k: {} }; e.s += b.betrag; e.k[k] = (e.k[k] || 0) + b.betrag;
+  };
+  aus.forEach(b => dazu(IST_REISE(b.kategorie) ? 'Reisen' : gruppeVon[b.kategorie] || 'Übrige', b));
+  rue.forEach(b => dazu('Jahresrechnungen', b));
+  spa.forEach(b => dazu('Sparen', b));
+  const teile = Object.entries(g).filter(([, e]) => e.s >= 0.5).map(([n, e]) => ({ n, s: e.s, k: e.k, slot: SERIE[n] || 0 }));
+  const total = teile.reduce((a, t) => a + t.s, 0);
+  if (!teile.length || total <= 0) return '';
+  const pct = s => { const p = s / total * 100; return p > 0 && p < 1 ? '<1' : String(Math.round(p)); };
+  const farbe = t => `var(--serie-${t.slot})`;
+  const balken = teile.slice().sort((a, b) => (a.slot || 99) - (b.slot || 99));
+  const liste = teile.slice().sort((a, b) => b.s - a.s);
+  return `<h2 class="section">Wohin das Geld geht · ${esc(zeitraum)}</h2><div class="card">
+    <div class="segbar" role="img" aria-label="Aufteilung ${esc(zeitraum)}: ${balken.map(t => `${t.n} ${chf0(t.s)} Franken, ${pct(t.s).replace('<', 'unter ')} Prozent`).join('; ')}">
+      ${balken.map(t => `<span style="flex:${t.s.toFixed(2)} 1 0;background:${farbe(t)}" title="${esc(t.n)}: ${chf0(t.s)} CHF · ${pct(t.s)} %"></span>`).join('')}</div>
+    ${liste.map(t => {
+      const offen = offeneGruppe === t.n;
+      const kats = Object.entries(t.k).filter(([, v]) => Math.abs(v) >= 0.5).sort((a, b) => b[1] - a[1]);
+      return `<div class="rrow-wrap"><button type="button" class="plain cat rrow gfrow" data-gf="${esc(t.n)}" aria-expanded="${offen}">
+          <span class="row"><i class="sw" style="background:${farbe(t)}" aria-hidden="true"></i><span class="grow name">${esc(t.n)}</span>
+            <span class="muted num small gfpct">${esc(pct(t.s))} %</span><span class="num gfbetrag">${chf0(t.s)}</span>${ico('chev', 'chev', 18)}</span></button>
+        ${offen ? `<div class="cat-detail small">${kats.map(([k, v]) => `<div class="row" style="padding:2px 0"><span class="grow">${esc(IST_REISE(k) ? k.replace(/^Reise\s+/, 'Reise: ') : k)}</span><span class="num">${chf(v)}</span></div>`).join('')}</div>` : ''}</div>`;
+    }).join('')}
+    <div class="small muted" style="margin-top:var(--s2)">Ausgaben, Jahresrechnungen und Sparen zusammen: <b class="num">${chf0(total)}</b>. Antippen zeigt die Kategorien.</div></div>`;
 }
 
 function renderKats() {
@@ -136,17 +178,20 @@ function renderKats() {
     const offen = offeneKat === k.name;
     const pct = k.budget ? Math.max(0, Math.min(100, k.ist / k.budget * 100)) : (k.ist > 0 ? 100 : 0);
     const zustand = !k.budget ? '' : k.ist > k.budget ? 'over' : k.ist >= k.budget * .85 ? 'warn' : '';
-    const sub = !k.budget ? 'ohne Budget'
+    const sub = k.reisen ? `${k.reisen.length} Reise${k.reisen.length === 1 ? '' : 'n'} · Jahresrahmen in der Auswertung`
+      : !k.budget ? 'ohne Budget'
       : k.ist > k.budget ? `${chf0(k.ist - k.budget)} über Budget` : `noch ${chf0(k.budget - k.ist)}`;
-    const liste = offen ? AUS.filter(b => (b.kategorie || '(ohne)') === k.name).sort((a, b) => b.datum.localeCompare(a.datum)) : [];
+    const liste = !offen ? [] : AUS.filter(b => k.reisen ? IST_REISE(b.kategorie) : (b.kategorie || '(ohne)') === k.name).sort((a, b) => b.datum.localeCompare(a.datum));
+    const teile = offen && k.reisen ? `<div class="small" style="padding:var(--s2) 0">${k.reisen.map(r =>
+      `<div class="row"><span class="grow">${esc(r.n.replace(/^Reise\s+/, ''))}</span><span class="num">${chf(r.s)}</span></div>`).join('')}</div>` : '';
     return `<div class="cat-wrap">
       <button type="button" class="plain cat" data-k="${esc(k.name)}" aria-expanded="${offen}">
-        <span class="row"><span class="grow name">${esc(k.name)}</span><span class="num">${chf(k.ist)}</span>${ico('chev', 'chev', 18)}</span>
+        <span class="row"><span class="grow name">${esc(k.label || k.name)}</span><span class="num">${chf(k.ist)}</span>${ico('chev', 'chev', 18)}</span>
         <span class="bar ${zustand}" style="display:block"><span style="display:block;width:${pct}%"></span></span>
         <span class="row small"><span class="grow ${zustand === 'over' ? 'neg' : 'muted'}">${sub}</span>
           ${k.budget ? `<span class="muted num">Budget ${chf0(k.budget)}</span>` : ''}</span>
       </button>
-      ${offen ? `<div class="cat-detail">${txList(liste)}</div>` : ''}</div>`;
+      ${offen ? `<div class="cat-detail">${teile}${txList(liste)}</div>` : ''}</div>`;
   }).join('') || '<div class="empty muted">Keine Ausgaben in diesem Zeitraum.</div>';
   $$('.cat', el).forEach(b => b.onclick = () => { offeneKat = offeneKat === b.dataset.k ? null : b.dataset.k; renderKats(); });
   bindTx(el);
