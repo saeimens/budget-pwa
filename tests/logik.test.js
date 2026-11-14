@@ -127,4 +127,30 @@ test('CSV-Parser: Anführungszeichen, Semikolon im Feld, Zeilenumbruch im Feld',
   assert.deepStrictEqual(L.parseCsv('a;"b;c";"d ""e"""\n"x\ny";z\n', ';'), [['a', 'b;c', 'd "e"'], ['x\ny', 'z']]);
 });
 
+test('Wiederkehrend: monatlich, vierteljährlich, jährlich, Mehrfachzahlung am selben Tag; Unregelmässiges und Beendetes nicht', () => {
+  const b = (datum, betrag, kategorie, notiz, typ = 'Ausgabe') => ({ datum, betrag, kategorie, notiz, typ });
+  const l = [];
+  ['2026-06-15', '2026-07-15', '2026-08-14', '2026-09-15', '2026-10-15'].forEach(d => l.push(b(d, 39.95, 'TV, Internet', 'Salt')));
+  ['2026-01-02', '2026-04-01', '2026-07-01', '2026-10-01'].forEach(d => l.push(b(d, 593.5, 'Krankenkasse', 'Sanitas (Rechnung)', 'Rückstellung')));
+  [['2024-12-10', 400], ['2024-12-10', 400], ['2025-12-04', 400], ['2025-12-04', 400]].forEach(([d, v]) => l.push(b(d, v, 'Reka Aufladung', 'Reka', 'Rückstellung')));
+  ['2026-09-02', '2026-09-09', '2026-09-30', '2026-10-03'].forEach(d => l.push(b(d, 80, 'Schwimm-Lektionen', 'Lektion mit Sascha')));
+  ['2025-01-05', '2025-02-05', '2025-03-05', '2025-04-05'].forEach(d => l.push(b(d, 20, 'Software & KI-Abos', 'Altes Abo')));
+  ['2026-08-01', '2026-09-01', '2026-10-01'].forEach((d, i) => l.push(b(d, [60, 75, 90][i], 'Strom', 'EWB')));
+  ['2026-07-10', '2026-08-10', '2026-09-10', '2026-10-10'].forEach((d, i) => l.push(b(d, [40, 420, 95, 260][i], 'Kleidung & Schuhe', 'Kleider')));
+  const r = L.wiederkehrend(l, '2026-11-12'), f = n => r.find(x => x.name.startsWith(n));
+  assert.strictEqual(f('Salt').rhythmus, 'monatlich'); assert.strictEqual(f('Salt').naechste, '2026-11-15'); assert.strictEqual(f('Salt').betrag, 39.95);
+  assert.strictEqual(f('Sanitas').rhythmus, 'vierteljährlich'); assert.strictEqual(f('Sanitas').naechste, '2027-01-01');
+  assert.strictEqual(f('Reka').rhythmus, 'jährlich'); assert.strictEqual(f('Reka').betrag, 800); assert.strictEqual(f('Reka').naechste, '2026-12-04');
+  assert.ok(!f('Lektion'), 'unregelmässige Lektionen sind kein Abo');
+  assert.ok(!f('Altes Abo'), 'seit Monaten beendet');
+  assert.ok(!f('Kleider'), 'stark schwankende Einkäufe sind kein Abo');
+  assert.strictEqual(f('EWB').variabel, true);
+  assert.deepStrictEqual(r.map(x => x.naechste), [...r.map(x => x.naechste)].sort());
+});
+
+test('Monate addieren: Monatsende', () => {
+  assert.strictEqual(L.plusMonate('2026-01-31', 1), '2026-02-28');
+  assert.strictEqual(L.plusMonate('2026-11-15', 2), '2027-01-15');
+});
+
 console.log(`\nALLES OK (${n} Tests)`);

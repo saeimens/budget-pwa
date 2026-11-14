@@ -326,6 +326,20 @@ const tick = (n = 3) => new Promise(r => setTimeout(r, 15 * n));
   w.eval("setAnsicht('budget')");
   S.Buchungen = S.Buchungen.filter(r => !['rs1', 'rs2'].includes(r[12]));
 
+  // Wiederkehrende Zahlungen: «Demnächst fällig» im Budget, Fixkosten in der Auswertung
+  [7, 8, 9, 10].forEach(m => S.Buchungen.push([ser(`${y}-${String(m).padStart(2, '0')}-15`), y, m, 'Ausgabe', 39.95, 'Kleider', 'Salt Abo', 'Karte', 'SALT', 'Import', 'ok', '', 'wk' + m]));
+  await w.eval('load(null)'); await tick(6);
+  doc.querySelector('nav [data-v=uebersicht]').click(); w.eval("setAnsicht('budget'); waehleMonat(" + mo + ")"); await tick();
+  check('Budget: «Demnächst fällig» mit dem nächsten Termin', /Demnächst fällig/.test($('#uebersicht').textContent) && /15\.11\.26/.test($('#uebersicht').textContent)
+    && /Salt Abo/.test($('#uebersicht').textContent));
+  $('#zuWk').click(); await tick();
+  check('Wiederkehrend: «Alle» öffnet die Auswertung mit Fixkosten', $('#title').textContent.startsWith('Auswertung') && !!$('#wk')
+    && /Fixkosten pro Monat/.test($('#uebersicht').textContent) && /monatlich/i.test($('#uebersicht').textContent));
+  doc.querySelector('[data-wk]').click(); await tick();
+  check('Wiederkehrend: aufklappen zeigt die Buchungen', doc.querySelectorAll('.cat-detail .tx').length === 4);
+  S.Buchungen = S.Buchungen.filter(r => !String(r[12]).startsWith('wk'));
+  w.eval("setAnsicht('budget')");
+
   const zurueck = JSON.parse(sicher); S.Kategorien = zurueck.k; S.Regeln = zurueck.r; S['Rückstellungen'] = zurueck.p;
   await w.eval('load(null)'); await tick(6);
   doc.querySelector('nav [data-v=uebersicht]').click(); await tick();

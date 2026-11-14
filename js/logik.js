@@ -212,6 +212,67 @@ const Logik = (() => {
     return { format: parsed.format, datei, total: parsed.rows.length, neu, offen, doppelt, ignoriert, hinweise: parsed.hinweise || [], saldo: parsed.saldo || null };
   }
 
-  return { parseCsv, parseNum, classify, regelnAusZeilen, auswerten };
+  /**
+   * Wiederkehrende Zahlungen erkennen (Abos, Miete, Daueraufträge, Jahresrechnungen).
+   * Gruppiert Ausgaben, Jahresrechnungen und Sparen nach Typ + Kategorie + Notiz (ohne Zahlen/Klammern),
+   * fasst Zahlungen am selben Tag zusammen und sucht einen regelmässigen Abstand.
+   * @param buchungen  [{ datum:'YYYY-MM-DD', typ, betrag, kategorie, notiz, banktext }]
+   * @param heute      'YYYY-MM-DD'
+   * @returns [{ name, kategorie, typ, rhythmus, monate, betrag, variabel, letzte, naechste, anzahl, proMonat, buchungen }]
+   */
+  const RHYTHMEN = [
+    { name: 'monatlich', monate: 1, min: 24, max: 38, mindest: 3 },
+    { name: 'vierteljährlich', monate: 3, min: 80, max: 100, mindest: 3 },
+    { name: 'halbjährlich', monate: 6, min: 165, max: 200, mindest: 2 },
+    { name: 'jährlich', monate: 12, min: 335, max: 395, mindest: 2 }
+  ];
+  const tageZwischen = (a, b) => Math.round((Date.UTC(+b.slice(0, 4), +b.slice(5, 7) - 1, +b.slice(8, 10)) - Date.UTC(+a.slice(0, 4), +a.slice(5, 7) - 1, +a.slice(8, 10))) / 864e5);
+  function plusMonate(iso, n) {
+    const [y, m, d] = iso.split('-').map(Number), z = new Date(Date.UTC(y, m - 1 + n, 1));
+    const letzter = new Date(Date.UTC(z.getUTCFullYear(), z.getUTCMonth() + 1, 0)).getUTCDate();
+    return `${z.getUTCFullYear()}-${String(z.getUTCMonth() + 1).padStart(2, '0')}-${String(Math.min(d, letzter)).padStart(2, '0')}`;
+  }
+  const notizKern = b => String(b.notiz || b.banktext || '').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[0-9.,:/'’-]+/g, ' ')
+    .replace(/[^a-zäöüéèàç& ]+/g, ' ').split(/\s+/).filter(w => w.length > 1).slice(0, 2).join(' ');
+  function wiederkehrend(buchungen, heute) {
+    const gruppen = new Map();
+    buchungen.filter(b => ['Ausgabe', 'Rückstellung', 'Sparen'].includes(b.typ) && b.betrag > 0 && b.datum && b.datum <= heute)
+      .forEach(b => {
+        const key = b.typ + '|' + (b.kategorie || '') + '|' + notizKern(b);
+        if (!gruppen.has(key)) gruppen.set(key, []);
+        gruppen.get(key).push(b);
+      });
+    const out = [];
+    gruppen.forEach(liste => {
+      const proTag = new Map();   // mehrere Zahlungen am selben Tag (z. B. 4 × 400 Reka) = ein Termin
+      liste.forEach(b => proTag.set(b.datum, (proTag.get(b.datum) || 0) + b.betrag));
+      const termine = [...proTag.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-8);
+      if (termine.length < 2) return;
+      const abst = termine.slice(1).map((t, i) => tageZwischen(termine[i][0], t[0]));
+      const median = [...abst].sort((a, b) => a - b)[Math.floor(abst.length / 2)];
+      const r = RHYTHMEN.find(x => median >= x.min && median <= x.max);
+      if (!r || termine.length < r.mindest) return;
+      const passend = abst.filter(a => a >= r.min && a <= r.max).length;
+      if (passend / abst.length < 0.75) return;
+      const letzte = termine[termine.length - 1][0];
+      if (tageZwischen(letzte, heute) > r.max * 1.5 + 5) return;   // läuft nicht mehr
+      // laufende Ausgaben mit stark schwankendem Betrag (Kleider, Konzerte …) sind keine Abos
+      const werte = termine.map(t => t[1]), mittel = werte.reduce((a, v) => a + v, 0) / werte.length;
+      const streuung = Math.sqrt(werte.reduce((a, v) => a + (v - mittel) ** 2, 0) / werte.length) / mittel;
+      if (liste[0].typ === 'Ausgabe' && streuung > 0.35) return;
+      const juengste = termine.slice(-3).map(t => t[1]).sort((a, b) => a - b);
+      const betrag = juengste[Math.floor(juengste.length / 2)];
+      const neueste = liste.slice().sort((a, b) => b.datum.localeCompare(a.datum))[0];
+      let naechste = plusMonate(letzte, r.monate);
+      while (tageZwischen(naechste, heute) > 7) naechste = plusMonate(naechste, r.monate);   // mehr als eine Woche überfällig: nächster Termin
+      out.push({ name: neueste.notiz || neueste.kategorie || neueste.banktext, kategorie: neueste.kategorie, typ: neueste.typ,
+        rhythmus: r.name, monate: r.monate, betrag: Math.round(betrag * 100) / 100,
+        variabel: (juengste[juengste.length - 1] - juengste[0]) > betrag * 0.1, letzte, naechste, anzahl: termine.length,
+        proMonat: Math.round(betrag / r.monate * 100) / 100, buchungen: liste });
+    });
+    return out.sort((a, b) => a.naechste.localeCompare(b.naechste));
+  }
+
+  return { parseCsv, parseNum, classify, regelnAusZeilen, auswerten, wiederkehrend, plusMonate };
 })();
 if (typeof module !== 'undefined') module.exports = Logik;

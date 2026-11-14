@@ -134,7 +134,8 @@ function renderAuswertung() {
       : `<div class="empty muted">Keine Reisen in ${jahr}.</div>`}</div>
     ${reiseJahre.length ? reiseVerlauf(reiseJahre, rBudget, jahr) : ''}`;
 
-  $('#uebersicht').innerHTML = `<div style="margin-top:var(--s3)">${hero}</div>${einnahmen}${reisen}${sparTab}`;
+  $('#uebersicht').innerHTML = `<div style="margin-top:var(--s3)">${hero}</div>${laufend ? wiederkehrendHtml() : ''}${einnahmen}${reisen}${sparTab}`;
   $$('#uebersicht [data-aw]').forEach(b => b.onclick = () => { offenAw = offenAw === b.dataset.aw ? null : b.dataset.aw; renderAuswertung(); });
+  bindWiederkehrend($('#uebersicht'), renderAuswertung);
   bindTx($('#uebersicht'));
 }
