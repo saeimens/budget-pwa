@@ -98,7 +98,19 @@ function renderAuswertung() {
   const rMax = Math.max(1, ...rNamen.map(n => sum(rJ[n])));
   const reiseJahre = jahre.map(j => ({ j, s: sum(alle.filter(b => b.jahr === j && b.typ === 'Ausgabe' && IST_REISE(b.kategorie))) })).filter(x => Math.round(x.s));
   const zeitraum = l => { const d = l.map(b => b.datum).sort(); return d[0] === d[d.length - 1] ? fmtDate(d[0]) : `${fmtDate(d[0])} – ${fmtDate(d[d.length - 1])}`; };
-  const reisen = `<h2 class="section">Reisen ${jahr} · antippen für Buchungen</h2>
+  // Jahresrahmen für grosse Reisen (Blatt «Einstellungen» → «Reisebudget pro Jahr»)
+  const rBudget = Number((D.einst || {})['Reisebudget pro Jahr']) || 0;
+  const rSumme = rNamen.reduce((a, n) => a + sum(rJ[n]), 0);
+  let rahmen = '';
+  if (rBudget > 0) {
+    const rest = rBudget - rSumme, pct = Math.max(0, Math.min(100, rSumme / rBudget * 100));
+    const zustand = rest < 0 ? 'over' : rSumme >= rBudget * .85 ? 'warn' : '';
+    rahmen = `<div class="card" style="margin-bottom:var(--s3)">
+      <div class="row"><span class="grow label">Reisebudget ${jahr}</span><b class="num ${rest < 0 ? 'neg' : ''}">${rest < 0 ? `${chf0(-rest)} darüber` : `noch ${chf0(rest)}`}</b></div>
+      <div class="bar ${zustand}" style="margin:var(--s2) 0" role="img" aria-label="${chf0(rSumme)} von ${chf0(rBudget)} Franken für Reisen gebraucht"><div style="width:${pct}%"></div></div>
+      <div class="small muted">${chf0(rSumme)} von ${chf0(rBudget)} gebraucht · ändern unter «Budgets &amp; Regeln»${jahr !== CUR_Y ? ' (Rahmen von heute)' : ''}</div></div>`;
+  }
+  const reisen = `<h2 class="section">Reisen ${jahr} · antippen für Buchungen</h2>${rahmen}
     <div class="card" style="padding-block:var(--s2)">${rNamen.length ? rNamen.map(n => {
         const offen = offenAw === 'r:' + n;
         return `<div class="rrow-wrap"><button type="button" class="plain cat rrow" data-aw="${esc('r:' + n)}" aria-expanded="${offen}">

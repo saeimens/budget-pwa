@@ -147,7 +147,7 @@ const Daten = (() => {
     const j = await api('/values:batchGet?' + ranges + '&valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=SERIAL_NUMBER');
     const werte = j.valueRanges.map(v => v.values || []);
     const [b, k, r, e] = werte, rs = hatR ? werte[4] : [], vm = hatV ? werte[hatR ? 5 : 4] : [];
-    const einst = {}; e.forEach(x => { if (x[0]) einst[String(x[0])] = x[1]; });
+    const einst = {}, einstRow = {}; e.forEach((x, i) => { if (x[0]) { einst[String(x[0])] = x[1]; einstRow[String(x[0])] = i + 2; } });
     D = {
       vermoegen: vm.filter(x => x[0] && x[1] && x[3] !== '' && x[3] !== undefined)
         .map(x => ({ datum: datumAus(x[0]), konto: str(x[1]), gruppe: str(x[2]) || 'Flüssig', saldo: num(x[3]), bemerkung: str(x[4]) })),
@@ -157,7 +157,7 @@ const Daten = (() => {
       buchungen: b.map(buchungAusZeile).filter(x => x.datum),
       kategorien: k.map((x, i) => [x, i + 2]).filter(([x]) => x[0] && !String(x[0]).startsWith('Typen'))
         .map(([x, row]) => ({ row, name: str(x[0]), gruppe: str(x[1]), budget: num(x[2]), bemerkung: str(x[3]) })),
-      regelnRows: r, einst, stand: Date.now()
+      regelnRows: r, einst, einstRow, stand: Date.now()
     };
     speicher.set(K.cache, D); melde();
     return D;
@@ -171,6 +171,7 @@ const Daten = (() => {
     const j = Number(jahr) || jahre[jahre.length - 1] || new Date().getFullYear();
     return { jahr: j, jahre, alle, buchungen: alle.filter(b => b.jahr === j), offen: alle.filter(b => b.status === 'prüfen'),
       kategorien: D ? D.kategorien : [], rueckstellungen: (D && D.rueckstellungen) || [], regelnRows: (D && D.regelnRows) || [],
+      einst: (D && D.einst) || {}, einstRow: (D && D.einstRow) || {},
       vermoegen: (D && D.vermoegen) || [], hatVermoegen: !!(D && D.hatVermoegen),
       offline: !navigator.onLine, warteschlange: queue.length };
   }
@@ -278,7 +279,7 @@ const Daten = (() => {
   }
 
   /* ---------------- Stammdaten: Kategorien, Rückstellungen, Regeln ---------------- */
-  const BLATT_SPALTEN = { Kategorien: 'D', 'Rückstellungen': 'E', Regeln: 'G' };
+  const BLATT_SPALTEN = { Kategorien: 'D', 'Rückstellungen': 'E', Regeln: 'G', Einstellungen: 'B' };
   const zelleWert = v => typeof v === 'number' ? { userEnteredValue: { numberValue: v } } : { userEnteredValue: { stringValue: str(v) } };
   /**
    * Eine Zeile in Kategorien / Rückstellungen / Regeln ändern, anlegen oder löschen. Nur online.

@@ -31,6 +31,9 @@ function renderVerwalten() {
     const total = k.reduce((a, x) => a + x.budget, 0);
     html += `<p class="lead" style="margin-top:0">Monatsbudget pro Kategorie. Total <b class="num">${chf0(total)}</b> pro Monat, <b class="num">${chf0(total * 12)}</b> pro Jahr.</p>
       <button type="button" class="ghost" data-neu="kategorie" style="width:100%;margin-bottom:var(--s3)">${ico('plus', '', 18)} Neue Kategorie</button>
+      <div class="card" style="padding-block:var(--s1)"><button type="button" class="plain cat rrow" id="vwReise" aria-label="Reisebudget pro Jahr ${RB_WERT() ? chf0(RB_WERT()) + ' Franken' : 'nicht festgelegt'}, bearbeiten">
+        <span class="row"><span class="grow name">Reisebudget pro Jahr</span><span class="num ${RB_WERT() ? '' : 'muted'}">${RB_WERT() ? chf0(RB_WERT()) : '–'}</span>${ico('chev', 'chev', 18)}</span>
+        <span class="small muted" style="display:block">Für grosse Reisen («Reise …»), zusätzlich zu «Reisen &amp; Ausflüge». Stand siehe Auswertung.</span></button></div>
       ${gruppen.map(g => `<h2 class="section">${esc(g)}</h2><div class="card" style="padding-block:var(--s1)">${k.filter(x => (x.gruppe || 'Ohne Gruppe') === g).map(x => `
         <button type="button" class="plain cat rrow" data-k="${esc(x.name)}" aria-label="${esc(x.name)}, Budget ${chf0(x.budget)} pro Monat, bearbeiten">
           <span class="row"><span class="grow name">${esc(x.name)}</span><span class="num ${x.budget ? '' : 'muted'}">${x.budget ? chf0(x.budget) : '–'}</span>${ico('chev', 'chev', 18)}</span>
@@ -72,7 +75,10 @@ function renderVerwalten() {
     const f = $('#vwSuche'); f.focus(); f.setSelectionRange(pos, pos);
   };
   if ($('#vwMehr')) $('#vwMehr').onclick = () => { vw.mehr = true; renderVerwalten(); };
+  if ($('#vwReise')) $('#vwReise').onclick = () => { const row = (D.einstRow || {})[RB_NAME]; oeffneVw('reisebudget', row ? { row, wert: RB_WERT() } : null); };
 }
+const RB_NAME = 'Reisebudget pro Jahr';
+const RB_WERT = () => Number((D.einst || {})[RB_NAME]) || 0;
 
 /* Dialog */
 const feld = (id, label, wert, extra = '') => `<label class="field"><span>${label}</span><input type="text" id="${id}" value="${esc(wert)}" autocomplete="off" ${extra}></label>`;
@@ -96,6 +102,10 @@ function oeffneVw(art, x) {
       <div class="grid2">${feld('vwRate', 'Rate pro Monat (CHF)', x ? x.rate : '', 'inputmode="decimal"')}
         <label class="field"><span>Im Plan</span><select id="vwAktiv"><option value="ja" ${!x || x.aktiv ? 'selected' : ''}>aktiv</option><option value="nein" ${x && !x.aktiv ? 'selected' : ''}>inaktiv</option></select></label></div>
       ${feld('vwBem', 'Bemerkung (optional)', x ? x.bemerkung : '')}`;
+  } else if (art === 'reisebudget') {
+    titel = 'Reisebudget pro Jahr';
+    felder = `${feld('vwRb', 'Betrag pro Jahr (CHF)', x ? x.wert : '', 'inputmode="decimal" aria-describedby="vwRbHilfe"')}
+      <div class="small muted" id="vwRbHilfe">Rahmen für grosse Reisen (Kategorien «Reise …»). 0 oder leer blendet die Anzeige aus.</div>`;
   } else {
     titel = neu ? 'Neue Regel' : `Regel ${x.pos}`; loeschen = !neu;
     const typ = x ? x.typ : 'Ausgabe', ri = x ? x.richtung.toLowerCase() : 'beide';
@@ -137,6 +147,11 @@ async function vwSpeichern(e) {
     if (rate === '' || Number.isNaN(rate) || rate < 0) { markInvalid($('#vwRate')); return toast('Bitte eine gültige Rate pro Monat eingeben'); }
     blatt = 'Rückstellungen'; werte = [v('vwName'), v('vwKat'), rate, v('vwAktiv'), v('vwBem')]; erwartet = neu ? '' : x.posten;
     if (neu) row = Math.max(1, ...(D.rueckstellungen || []).map(p => p.row));
+  } else if (art === 'reisebudget') {
+    const n = zahlOderLeer(v('vwRb'));
+    if (Number.isNaN(n) || n < 0) { markInvalid($('#vwRb')); return toast('Bitte einen gültigen Betrag eingeben'); }
+    blatt = 'Einstellungen'; werte = [RB_NAME, n === '' ? 0 : n]; erwartet = neu ? '' : RB_NAME;
+    if (neu) row = Math.max(1, ...Object.values(D.einstRow || {}));
   } else {
     const faktor = zahlOderLeer(v('vwFaktor')), bis = zahlOderLeer(v('vwBis')), typ = v('vwTyp');
     if (!v('vwSb')) { markInvalid($('#vwSb')); return toast('Bitte einen Suchbegriff eingeben'); }

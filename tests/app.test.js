@@ -265,6 +265,28 @@ const tick = (n = 3) => new Promise(r => setTimeout(r, 15 * n));
   check('Zeile im Sheet geändert: nichts überschrieben, Hinweis', S.Regeln[1][0] === 'inzwischen im Sheet geändert' && S.Regeln[1][6] !== 'neu'
     && /inzwischen geändert/.test($('#toast').textContent));
   $('#vwdlg').close();
+
+  // Reisebudget pro Jahr (Blatt «Einstellungen»)
+  const einstVorher = JSON.stringify(S.Einstellungen);
+  $('[data-vw="budgets"]').click(); await tick();
+  check('Reisebudget: noch nicht festgelegt', /Reisebudget pro Jahr/.test($('#vwReise').textContent) && /–/.test($('#vwReise .num').textContent));
+  $('#vwReise').click(); await tick(); $('#vwRb').value = "6'000"; await speichern();
+  check('Reisebudget: neu im Blatt Einstellungen', JSON.stringify(S.Einstellungen[S.Einstellungen.length - 1]) === JSON.stringify(['Reisebudget pro Jahr', 6000])
+    && /6'000/.test($('#vwReise .num').textContent));
+  S.Buchungen.push([ser(`${y}-05-02`), y, 5, 'Ausgabe', 1500, 'Reise Rom Mai 2026', 'Flug', 'Karte', 'FLUG', 'Import', 'ok', '', 'rb1']);
+  await w.eval('load(null)'); await tick(6);
+  doc.querySelector('nav [data-v=uebersicht]').click(); w.eval("setAnsicht('auswertung')"); await tick();
+  check('Auswertung: Reisebudget mit Stand', /Reisebudget \d{4}/.test($('#uebersicht').textContent) && /1'500 von 6'000/.test($('#uebersicht').textContent)
+    && /noch 4'500/.test($('#uebersicht').textContent));
+  w.eval("oeffneVerwalten('budgets')"); await tick();
+  $('#vwReise').click(); await tick();
+  check('Reisebudget: Dialog vorbelegt', $('#vwRb').value === '6000');
+  $('#vwRb').value = '0'; await speichern();
+  doc.querySelector('nav [data-v=uebersicht]').click(); w.eval("setAnsicht('auswertung')"); await tick();
+  check('Reisebudget 0: Anzeige ausgeblendet', !/Reisebudget/.test($('#uebersicht').textContent) && S.Einstellungen[S.Einstellungen.length - 1][1] === 0);
+  S.Einstellungen = JSON.parse(einstVorher); S.Buchungen.splice(S.Buchungen.findIndex(r => r[12] === 'rb1'), 1);
+  w.eval("setAnsicht('budget')");
+
   const zurueck = JSON.parse(sicher); S.Kategorien = zurueck.k; S.Regeln = zurueck.r; S['Rückstellungen'] = zurueck.p;
   await w.eval('load(null)'); await tick(6);
   doc.querySelector('nav [data-v=uebersicht]').click(); await tick();
