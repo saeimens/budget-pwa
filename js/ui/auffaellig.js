@@ -22,7 +22,7 @@ let afAlle = false;
 function auffaelligHtml() {
   if (!D || D.jahr !== CUR_Y || (monat !== 0 && monat !== CUR_M)) return '';
   const ok = afErledigt();
-  const l = Logik.auffaelligkeiten(D.alle || D.buchungen, isoLocal(HEUTE)).filter(a => !ok.has(a.id));
+  const l = Logik.auffaelligkeiten(D.alle || D.buchungen, isoLocal(HEUTE), wkListe()).filter(a => !ok.has(a.id));
   if (!l.length) return '';
   const zeigen = afAlle ? l : l.slice(0, 3);
   AF_LISTE = l;

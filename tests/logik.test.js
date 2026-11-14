@@ -211,6 +211,18 @@ test('Wiederkehrend: Zahlung mit neuer Notiz in derselben Kategorie zählt als b
   assert.strictEqual(r[0].name, 'Gemini Abo'); assert.strictEqual(r[0].letzte, '2026-11-11'); assert.strictEqual(r[0].naechste, '2026-12-11');
 });
 
+test('Wiederkehrend: zwei Zahlungen im Jahresabstand nur bei Abos; Ausgeblendetes fehlt', () => {
+  const b = (datum, kategorie, notiz, betrag, typ = 'Ausgabe') => ({ datum, betrag, kategorie, notiz, typ });
+  const l = [b('2025-04-20', 'Lebensmittel', 'Apfelkuchen', 5), b('2026-04-20', 'Lebensmittel', 'Apfelkuchen', 5),
+    b('2025-12-14', 'Software & KI-Abos', 'Bitwarden', 9), b('2026-12-01', 'Software & KI-Abos', 'Bitwarden', 9),
+    b('2025-09-19', 'Ausgehen & Soziales', 'Gazzetta, Abo', 30), b('2026-09-19', 'Ausgehen & Soziales', 'Gazzetta, Abo', 30),
+    b('2025-03-31', 'Rechtsschutz', 'Protekta', 270, 'Rückstellung'), b('2026-03-31', 'Rechtsschutz', 'Protekta', 270, 'Rückstellung')];
+  const namen = r => r.map(w => w.name).sort();
+  assert.deepStrictEqual(namen(L.wiederkehrend(l, '2026-12-05')), ['Gazzetta, Abo', 'Protekta']);
+  const opts = { abo: k => k === 'Software & KI-Abos', aus: new Set(['Rückstellung|Rechtsschutz|Protekta']) };
+  assert.deepStrictEqual(namen(L.wiederkehrend(l, '2026-12-05', undefined, opts)), ['Bitwarden', 'Gazzetta, Abo']);
+});
+
 test('Monate addieren: Monatsende', () => {
   assert.strictEqual(L.plusMonate('2026-01-31', 1), '2026-02-28');
   assert.strictEqual(L.plusMonate('2026-11-15', 2), '2027-01-15');

@@ -32,7 +32,7 @@ function awPrognose(alle) {
 // Gestapelte Säulen: Einnahmen der letzten 12 Monate, fest (regelmässig wiederkehrend) und variabel
 function einnahmenFestVariabel() {
   const alle = D.alle || D.buchungen, heute = isoLocal(HEUTE);
-  const fest = new Set(); Logik.wiederkehrend(alle, heute, ['Einnahme']).forEach(w => w.buchungen.forEach(b => fest.add(b)));
+  const fest = new Set(); Logik.wiederkehrend(alle, heute, ['Einnahme'], wkOpts()).forEach(w => w.buchungen.forEach(b => fest.add(b)));
   const monate = Array.from({ length: 12 }, (_, i) => Logik.plusMonate(heute.slice(0, 7) + '-01', i - 11).slice(0, 7));
   const daten = monate.map(m => { const l = alle.filter(b => b.typ === 'Einnahme' && b.datum.slice(0, 7) === m);
     return { m, f: l.filter(b => fest.has(b)).reduce((a, b) => a + b.betrag, 0), v: l.filter(b => !fest.has(b)).reduce((a, b) => a + b.betrag, 0) }; });

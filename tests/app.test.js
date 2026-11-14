@@ -341,6 +341,12 @@ const tick = (n = 3) => new Promise(r => setTimeout(r, 15 * n));
     && /Fixkosten pro Monat/.test($('#uebersicht').textContent) && /monatlich/i.test($('#uebersicht').textContent));
   doc.querySelector('[data-wk]').click(); await tick();
   check('Wiederkehrend: aufklappen zeigt die Buchungen', doc.querySelectorAll('.cat-detail .tx').length === 4);
+  doc.querySelector('[data-wkaus]').click(); await tick(10);
+  check('Wiederkehrend: «Nicht wiederkehrend» blendet aus und speichert im Blatt Einstellungen',
+    !doc.querySelector('[data-wk]') && S.Einstellungen.some(r => r[0] === 'Nicht wiederkehrend' && /Salt Abo/.test(r[1])) && /1 ausgeblendet/.test($('#uebersicht').textContent));
+  doc.querySelector('[data-wkein]').click(); await tick(10);
+  check('Wiederkehrend: «Wieder einblenden»', !!doc.querySelector('[data-wk]') && S.Einstellungen.some(r => r[0] === 'Nicht wiederkehrend' && r[1] === ''));
+  S.Einstellungen = S.Einstellungen.filter(r => r[0] !== 'Nicht wiederkehrend');
   S.Buchungen = S.Buchungen.filter(r => !String(r[12]).startsWith('wk'));
   w.eval("setAnsicht('budget')");
 

@@ -66,7 +66,7 @@ function prognoseHtml(reihe) {
   const konto = akt && akt.konten.find(k => /lohnkonto/i.test(k.konto));
   if (!konto) return '';
   const start = (D.vermoegen || []).filter(v => v.konto === konto.konto).sort((a, b) => a.datum.localeCompare(b.datum)).pop();
-  const p = Logik.prognose(D.alle || D.buchungen, { datum: start.datum, saldo: start.saldo }, isoLocal(HEUTE), 6);
+  const p = Logik.prognose(D.alle || D.buchungen, { datum: start.datum, saldo: start.saldo }, isoLocal(HEUTE), 6, wkOpts());
   const tief = p.monate.reduce((m, x) => x.ende < m.ende ? x : m, p.monate[0]);
   const st = tief.ende < 1000 ? 'rot' : tief.ende < 3000 ? 'gelb' : 'gruen';
   const groesster = tief.posten.filter(x => !x.ein).sort((a, b) => b.betrag - a.betrag)[0];

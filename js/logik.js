@@ -236,7 +236,9 @@ const Logik = (() => {
   }
   const notizKern = b => String(b.notiz || b.banktext || '').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[0-9.,:/'’-]+/g, ' ')
     .replace(/[^a-zäöüéèàç& ]+/g, ' ').split(/\s+/).filter(w => w.length > 1).slice(0, 2).join(' ');
-  function wiederkehrend(buchungen, heute, typen = ['Ausgabe', 'Rückstellung', 'Sparen']) {
+  // opts.abo(kategorie): Abo-Kategorie (darf schon nach 2 Zahlungen jährlich sein); opts.aus: Set ausgeblendeter Schlüssel
+  const wkSchluessel = w => w.typ + '|' + w.kategorie + '|' + w.name;
+  function wiederkehrend(buchungen, heute, typen = ['Ausgabe', 'Rückstellung', 'Sparen'], opts = {}) {
     const gruppen = new Map();
     buchungen.filter(b => typen.includes(b.typ) && b.betrag > 0 && b.datum && b.datum <= heute)
       .forEach(b => {
@@ -254,6 +256,8 @@ const Logik = (() => {
       const median = [...abst].sort((a, b) => a - b)[Math.floor(abst.length / 2)];
       const r = RHYTHMEN.find(x => median >= x.min && median <= x.max);
       if (!r || termine.length < r.mindest) return;
+      // nur zwei Zahlungen im Halbjahres-/Jahresabstand: bei Ausgaben nur in Abo-Kategorien oder mit «Abo» in der Notiz (sonst Zufall)
+      if (termine.length < 3 && liste[0].typ === 'Ausgabe' && !(opts.abo && opts.abo(liste[0].kategorie)) && !liste.some(b => /\babo\b/i.test(b.notiz || ''))) return;
       const passend = abst.filter(a => a >= r.min && a <= r.max).length;
       if (passend / abst.length < 0.75) return;
       let letzte = termine[termine.length - 1][0];
@@ -283,7 +287,7 @@ const Logik = (() => {
     });
     // dieselbe Zahlung nicht doppelt aufführen (z. B. Notiz gewechselt): bei gemeinsamen Buchungen die längere Reihe behalten
     const behalten = [];
-    out.sort((a, b) => b.anzahl - a.anzahl).forEach(w => { if (!behalten.some(x => x.buchungen.some(b => w.buchungen.includes(b)))) behalten.push(w); });
+    out.filter(w => !(opts.aus && opts.aus.has(wkSchluessel(w)))).sort((a, b) => b.anzahl - a.anzahl).forEach(w => { if (!behalten.some(x => x.buchungen.some(b => w.buchungen.includes(b)))) behalten.push(w); });
     return behalten.sort((a, b) => a.naechste.localeCompare(b.naechste));
   }
 
@@ -341,12 +345,12 @@ const Logik = (() => {
    * − übrige laufende Ausgaben im Schnitt der letzten 12 Monate (ohne Reisen; im laufenden Monat nur der Rest).
    * @returns { heute:{saldo}, schnittVariabel, monate:[{ monat, ein, fix, variabel, ende, posten:[{datum,name,betrag,ein}] }] }
    */
-  function prognose(buchungen, start, heute, anzahl = 6) {
+  function prognose(buchungen, start, heute, anzahl = 6, opts = {}) {
     const istReise = k => /^Reise\s/.test(k || '');
     const vz = b => b.typ === 'Einnahme' ? b.betrag : -b.betrag;
     let saldo = start.saldo + buchungen.filter(b => b.datum > start.datum && b.datum <= heute).reduce((a, b) => a + vz(b), 0);
     const saldoHeute = saldo;
-    const aus = wiederkehrend(buchungen, heute), ein = wiederkehrend(buchungen, heute, ['Einnahme']);
+    const aus = wiederkehrend(buchungen, heute, undefined, opts), ein = wiederkehrend(buchungen, heute, ['Einnahme'], opts);
     const abo = new Set(); aus.forEach(w => w.buchungen.forEach(b => abo.add(b)));
     const monat = heute.slice(0, 7);
     const vorher = Array.from({ length: 12 }, (_, i) => plusMonate(monat + '-01', -(i + 1)).slice(0, 7));
@@ -369,6 +373,6 @@ const Logik = (() => {
     return { heute: { saldo: Math.round(saldoHeute * 100) / 100 }, schnittVariabel: Math.round(schnitt * 100) / 100, monate };
   }
 
-  return { parseCsv, parseNum, classify, regelnAusZeilen, auswerten, wiederkehrend, auffaelligkeiten, prognose, plusMonate };
+  return { parseCsv, parseNum, classify, regelnAusZeilen, auswerten, wiederkehrend, wkSchluessel, auffaelligkeiten, prognose, plusMonate };
 })();
 if (typeof module !== 'undefined') module.exports = Logik;
