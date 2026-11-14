@@ -256,7 +256,12 @@ const Logik = (() => {
       if (!r || termine.length < r.mindest) return;
       const passend = abst.filter(a => a >= r.min && a <= r.max).length;
       if (passend / abst.length < 0.75) return;
-      const letzte = termine[termine.length - 1][0];
+      let letzte = termine[termine.length - 1][0];
+      // Zahlung mit anderer Notiz, aber gleicher Kategorie und ähnlichem Betrag nach dem letzten Termin zählt als bezahlt
+      const zuletzt = termine[termine.length - 1][1];
+      const nachzuegler = buchungen.filter(b => b.typ === liste[0].typ && b.kategorie === liste[0].kategorie && b.datum > letzte && b.datum <= heute
+        && !liste.includes(b) && Math.abs(b.betrag - zuletzt) <= Math.max(1, zuletzt * 0.1));
+      if (nachzuegler.length) { liste = liste.concat(nachzuegler); letzte = nachzuegler.map(b => b.datum).sort().pop(); }
       if (tageZwischen(letzte, heute) > r.max * 1.5 + 5) return;   // läuft nicht mehr
       // laufende Ausgaben mit stark schwankendem Betrag (Kleider, Konzerte …) sind keine Abos
       const werte = termine.map(t => t[1]), mittel = werte.reduce((a, v) => a + v, 0) / werte.length;
@@ -267,7 +272,7 @@ const Logik = (() => {
       const variabel = frueher.length > 1 && (frueher[frueher.length - 1] - frueher[0]) > frueher[Math.floor(frueher.length / 2)] * 0.1;
       const juengste = termine.slice(-3).map(t => t[1]).sort((a, b) => a - b);
       const betrag = variabel ? juengste[Math.floor(juengste.length / 2)] : termine[termine.length - 1][1];
-      const neueste = liste.slice().sort((a, b) => b.datum.localeCompare(a.datum))[0];
+      const neueste = liste.filter(b => !nachzuegler.includes(b)).sort((a, b) => b.datum.localeCompare(a.datum))[0];   // Name aus der Gruppe
       let naechste = plusMonate(letzte, r.monate);
       while (tageZwischen(naechste, heute) > 7) naechste = plusMonate(naechste, r.monate);   // mehr als eine Woche überfällig: nächster Termin
       out.push({ name: neueste.notiz || neueste.kategorie || neueste.banktext, kategorie: neueste.kategorie, typ: neueste.typ,
@@ -276,7 +281,10 @@ const Logik = (() => {
         proMonat: Math.round(betrag / r.monate * 100) / 100, buchungen: liste,
         erste: termine[0][0], jetzt: termine[termine.length - 1][1], vorher: termine[termine.length - 2][1] });
     });
-    return out.sort((a, b) => a.naechste.localeCompare(b.naechste));
+    // dieselbe Zahlung nicht doppelt aufführen (z. B. Notiz gewechselt): bei gemeinsamen Buchungen die längere Reihe behalten
+    const behalten = [];
+    out.sort((a, b) => b.anzahl - a.anzahl).forEach(w => { if (!behalten.some(x => x.buchungen.some(b => w.buchungen.includes(b)))) behalten.push(w); });
+    return behalten.sort((a, b) => a.naechste.localeCompare(b.naechste));
   }
 
   /**

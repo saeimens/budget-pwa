@@ -202,6 +202,15 @@ test('Prognose Kontostand: Start + Buchungen seither, dann Lohn, Fixkosten, Jahr
   assert.strictEqual(p.monate[3].ende, 5300 + 5000 - 800 + 3 * (5000 - 1500 - 1000) - 7000);
 });
 
+test('Wiederkehrend: Zahlung mit neuer Notiz in derselben Kategorie zählt als bezahlt', () => {
+  const b = (datum, notiz, betrag = 17) => ({ datum, betrag, kategorie: 'Google One (Gemini)', notiz, typ: 'Ausgabe' });
+  const l = ['2026-07-11', '2026-08-11', '2026-09-11', '2026-10-11'].map(d => b(d, 'Gemini Abo'));
+  l.push(b('2026-11-11', 'Google GOOGLE*ONE 01M'));
+  const r = L.wiederkehrend(l, '2026-11-14');
+  assert.strictEqual(r.length, 1);
+  assert.strictEqual(r[0].name, 'Gemini Abo'); assert.strictEqual(r[0].letzte, '2026-11-11'); assert.strictEqual(r[0].naechste, '2026-12-11');
+});
+
 test('Monate addieren: Monatsende', () => {
   assert.strictEqual(L.plusMonate('2026-01-31', 1), '2026-02-28');
   assert.strictEqual(L.plusMonate('2026-11-15', 2), '2027-01-15');
