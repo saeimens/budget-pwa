@@ -184,6 +184,9 @@ body.busy .busybar { opacity:1; }
 .gfrow .name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .gfrow .gfpct { flex:none; width:44px; text-align:right; }
 .gfrow .gfbetrag { flex:none; min-width:64px; text-align:right; }
+.afico { flex:none; display:inline-grid; place-items:center; width:22px; height:22px; border-radius:99px; margin-top:1px;
+  background:var(--warn); color:#1c1c1a; font-size:13px; font-weight:700; }
+.afknoepfe { justify-content:flex-end; gap:var(--s2); margin-top:var(--s2); }
 .wkdat { flex:none; width:72px; font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums; }
 .wkdat.warn { color:var(--warn); font-weight:600; }
 .jbars { position:relative; display:flex; align-items:flex-end; gap:var(--s3); margin-top:var(--s2); }

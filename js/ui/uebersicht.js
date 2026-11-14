@@ -120,7 +120,7 @@ function renderUebersicht() {
       ${neueste.length > 5 ? `<button type="button" class="ghost klein" id="neuMehr" style="width:100%;margin:var(--s2) 0" aria-expanded="${alleNeuesten}">
         ${alleNeuesten ? 'Weniger anzeigen' : `Alle ${neueste.length} Buchungen ${zeitraum} anzeigen`}</button>` : ''}</div>` : '';
 
-  $('#uebersicht').innerHTML = `${abschlussKarte()}${hero}${stats}${demnaechstHtml()}${fluss}${neu}${chart}
+  $('#uebersicht').innerHTML = `${abschlussKarte()}${hero}${stats}${auffaelligHtml()}${demnaechstHtml()}${fluss}${neu}${chart}
     <h2 class="section">Kategorien <span style="font-weight:400">· antippen für Details</span></h2>
     <div class="card" style="padding-block:var(--s1)" id="kats"></div>
     <button type="button" class="ghost klein" id="zuBudgets" style="margin-top:var(--s2)">Budgets bearbeiten</button>
@@ -131,6 +131,7 @@ function renderUebersicht() {
   bindTx($('#uebersicht'));
   bindAbschluss($('#uebersicht'));
   bindDemnaechst($('#uebersicht'));
+  bindAuffaellig($('#uebersicht'));
   $('#zuRueck').onclick = () => setAnsicht('rechnungen');
   $('#zuBudgets').onclick = () => oeffneVerwalten('budgets');
   if ($('#neuMehr')) $('#neuMehr').onclick = () => { alleNeuesten = !alleNeuesten; renderUebersicht(); if (!alleNeuesten) $('#neuMehr').scrollIntoView({ block:'nearest' }); };

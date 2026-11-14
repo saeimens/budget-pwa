@@ -340,6 +340,21 @@ const tick = (n = 3) => new Promise(r => setTimeout(r, 15 * n));
   S.Buchungen = S.Buchungen.filter(r => !String(r[12]).startsWith('wk'));
   w.eval("setAnsicht('budget')");
 
+  // Auffälligkeiten: mögliche Doppelzahlung, «Ansehen», «Passt so» mit Rückgängig
+  ['af1', 'af2'].forEach(k => S.Buchungen.push([ser(`${y}-${String(mo).padStart(2, '0')}-06`), y, mo, 'Ausgabe', 33.4, 'Kleider', 'Ticketmaster', 'Karte', 'TICKETMASTER', 'Import', 'ok', '', k]));
+  await w.eval('load(null)'); await tick(6);
+  w.eval("setAnsicht('budget'); waehleMonat(" + mo + ")"); await tick();
+  check('Auffälligkeiten: Doppelzahlung wird gezeigt', /Auffälligkeiten/.test($('#uebersicht').textContent) && /Möglicherweise doppelt: Ticketmaster/.test($('#uebersicht').textContent));
+  doc.querySelector('[data-af="0"][data-act="ansehen"]').click(); await tick();
+  check('Auffälligkeiten: «Ansehen» öffnet die Buchung', $('#edit').open && /Ticketmaster/.test($('#edTitel').textContent));
+  $('#edit').close();
+  doc.querySelector('[data-af="0"][data-act="ok"]').click(); await tick();
+  check('Auffälligkeiten: «Passt so» blendet aus, mit Rückgängig', !/Möglicherweise doppelt/.test($('#uebersicht').textContent) && /Rückgängig/.test($('#toast').textContent));
+  $('#toast button').click(); await tick();
+  check('Auffälligkeiten: Rückgängig zeigt den Hinweis wieder', /Möglicherweise doppelt/.test($('#uebersicht').textContent));
+  S.Buchungen = S.Buchungen.filter(r => !String(r[12]).startsWith('af'));
+  await w.eval('load(null)'); await tick(6);
+
   const zurueck = JSON.parse(sicher); S.Kategorien = zurueck.k; S.Regeln = zurueck.r; S['Rückstellungen'] = zurueck.p;
   await w.eval('load(null)'); await tick(6);
   doc.querySelector('nav [data-v=uebersicht]').click(); await tick();

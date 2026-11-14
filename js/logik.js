@@ -260,19 +260,70 @@ const Logik = (() => {
       const werte = termine.map(t => t[1]), mittel = werte.reduce((a, v) => a + v, 0) / werte.length;
       const streuung = Math.sqrt(werte.reduce((a, v) => a + (v - mittel) ** 2, 0) / werte.length) / mittel;
       if (liste[0].typ === 'Ausgabe' && streuung > 0.35) return;
+      // schwankend = die Zahlungen vor der letzten weichen mehr als 10 % voneinander ab (eine Preiserhöhung zählt nicht dazu)
+      const frueher = termine.slice(-4, -1).map(t => t[1]).sort((a, b) => a - b);
+      const variabel = frueher.length > 1 && (frueher[frueher.length - 1] - frueher[0]) > frueher[Math.floor(frueher.length / 2)] * 0.1;
       const juengste = termine.slice(-3).map(t => t[1]).sort((a, b) => a - b);
-      const betrag = juengste[Math.floor(juengste.length / 2)];
+      const betrag = variabel ? juengste[Math.floor(juengste.length / 2)] : termine[termine.length - 1][1];
       const neueste = liste.slice().sort((a, b) => b.datum.localeCompare(a.datum))[0];
       let naechste = plusMonate(letzte, r.monate);
       while (tageZwischen(naechste, heute) > 7) naechste = plusMonate(naechste, r.monate);   // mehr als eine Woche überfällig: nächster Termin
       out.push({ name: neueste.notiz || neueste.kategorie || neueste.banktext, kategorie: neueste.kategorie, typ: neueste.typ,
         rhythmus: r.name, monate: r.monate, betrag: Math.round(betrag * 100) / 100,
-        variabel: (juengste[juengste.length - 1] - juengste[0]) > betrag * 0.1, letzte, naechste, anzahl: termine.length,
-        proMonat: Math.round(betrag / r.monate * 100) / 100, buchungen: liste });
+        variabel, letzte, naechste, anzahl: termine.length,
+        proMonat: Math.round(betrag / r.monate * 100) / 100, buchungen: liste,
+        erste: termine[0][0], jetzt: termine[termine.length - 1][1], vorher: termine[termine.length - 2][1] });
     });
     return out.sort((a, b) => a.naechste.localeCompare(b.naechste));
   }
 
-  return { parseCsv, parseNum, classify, regelnAusZeilen, auswerten, wiederkehrend, plusMonate };
+  /**
+   * Auffälligkeiten der letzten 30 Tage: grosse Einzelausgabe, Kategorie über dem Üblichen,
+   * teurer gewordenes oder neues Abo, mögliche Doppelzahlung. Reisen («Reise …») sind ausgenommen.
+   * @returns [{ id, art, … }]  art: 'gross' | 'kategorie' | 'teurer' | 'neu' | 'doppelt'
+   */
+  function auffaelligkeiten(buchungen, heute, wk) {
+    wk = wk || wiederkehrend(buchungen, heute);
+    const istReise = k => /^Reise\s/.test(k || '');
+    const alter = b => tageZwischen(b.datum, heute);
+    const aus = buchungen.filter(b => b.typ === 'Ausgabe' && b.betrag > 0 && b.datum && b.datum <= heute && !istReise(b.kategorie));
+    const neu = aus.filter(b => alter(b) <= 30);
+    const median = l => { const s = [...l].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
+    const r2 = n => Math.round(n * 100) / 100;
+    const out = [];
+    // grosse Einzelausgabe: über 150, mehr als das Dreifache des Üblichen und höher als alles im Vorjahr der Kategorie
+    const hist = {};
+    aus.filter(b => alter(b) > 30 && alter(b) <= 395).forEach(b => (hist[b.kategorie] = hist[b.kategorie] || []).push(b.betrag));
+    neu.filter(b => b.betrag >= 150).forEach(b => {
+      const h = hist[b.kategorie] || [];
+      if (h.length < 5) return;
+      const med = median(h), max = Math.max(...h);
+      if (b.betrag > 3 * med && b.betrag > max) out.push({ id: 'gross|' + (b.key || b.datum + '|' + b.betrag), art: 'gross', buchung: b, kategorie: b.kategorie, betrag: b.betrag, ueblich: r2(med), bisher: r2(max) });
+    });
+    // Kategorie im laufenden Monat deutlich über dem Monatsschnitt der letzten 12 Monate
+    const monat = heute.slice(0, 7), vorMonate = Array.from({ length: 12 }, (_, i) => plusMonate(monat + '-01', -(i + 1)).slice(0, 7));
+    const katSum = (k, m) => aus.filter(b => b.kategorie === k && b.datum.slice(0, 7) === m).reduce((a, b) => a + b.betrag, 0);
+    [...new Set(aus.filter(b => b.datum.slice(0, 7) === monat).map(b => b.kategorie))].filter(Boolean).forEach(k => {
+      const verlauf = vorMonate.map(m => katSum(k, m));
+      if (verlauf.filter(v => v > 0).length < 6) return;
+      const schnitt = verlauf.reduce((a, v) => a + v, 0) / 12, jetzt = katSum(k, monat);
+      if (jetzt > schnitt * 1.5 && jetzt - schnitt >= 100) out.push({ id: 'kategorie|' + k + '|' + monat, art: 'kategorie', kategorie: k, betrag: r2(jetzt), schnitt: r2(schnitt) });
+    });
+    // Abos: teurer geworden (letzte Zahlung in den letzten 45 Tagen) oder neu (erste Zahlung vor höchstens 100 Tagen)
+    wk.forEach(w => {
+      const k = w.typ + '|' + w.kategorie + '|' + w.name;
+      if (!w.variabel && w.jetzt > w.vorher * 1.05 && w.jetzt <= w.vorher * 1.5 && w.jetzt - w.vorher >= 1 && tageZwischen(w.letzte, heute) <= 45)
+        out.push({ id: 'teurer|' + k + '|' + w.letzte, art: 'teurer', abo: w, vorher: r2(w.vorher), jetzt: r2(w.jetzt) });
+      if (tageZwischen(w.erste, heute) <= 100) out.push({ id: 'neu|' + k, art: 'neu', abo: w });
+    });
+    // mögliche Doppelzahlung: gleicher Tag, Betrag und Händler
+    const gleich = new Map();
+    neu.forEach(b => { const k = b.datum + '|' + b.betrag + '|' + String(b.banktext || b.notiz || '').toLowerCase().slice(0, 30); gleich.set(k, (gleich.get(k) || []).concat(b)); });
+    gleich.forEach((l, k) => { if (l.length > 1) out.push({ id: 'doppelt|' + k, art: 'doppelt', buchungen: l, buchung: l[0], betrag: l[0].betrag, anzahl: l.length }); });
+    const rang = { doppelt: 0, gross: 1, teurer: 2, kategorie: 3, neu: 4 };
+    return out.sort((a, b) => rang[a.art] - rang[b.art]);
+  }
+
+  return { parseCsv, parseNum, classify, regelnAusZeilen, auswerten, wiederkehrend, auffaelligkeiten, plusMonate };
 })();
 if (typeof module !== 'undefined') module.exports = Logik;

@@ -148,6 +148,32 @@ test('Wiederkehrend: monatlich, vierteljährlich, jährlich, Mehrfachzahlung am 
   assert.deepStrictEqual(r.map(x => x.naechste), [...r.map(x => x.naechste)].sort());
 });
 
+test('Auffälligkeiten: grosse Ausgabe, Kategorie über Schnitt, Abo teurer und neu, doppelt; Reisen und Normales nicht', () => {
+  const b = (datum, betrag, kategorie, notiz, extra = {}) => Object.assign({ datum, betrag, kategorie, notiz, typ: 'Ausgabe', banktext: notiz.toUpperCase() }, extra);
+  const l = [];
+  for (let m = 1; m <= 10; m++) {
+    const mm = String(m).padStart(2, '0');
+    l.push(b(`2026-${mm}-05`, 60 + m, 'Möbel & Geräte', 'Kleinkram'));
+    l.push(b(`2026-${mm}-08`, 100, 'Lebensmittel', 'Einkauf'), b(`2026-${mm}-20`, 100, 'Lebensmittel', 'Einkauf'));
+    l.push(b(`2026-${mm}-15`, m < 10 ? 39.95 : 44.95, 'TV, Internet', 'Salt'));
+  }
+  l.push(b('2026-11-03', 900, 'Möbel & Geräte', 'Sofa'));                      // gross
+  l.push(b('2026-11-02', 300, 'Lebensmittel', 'Einkauf'), b('2026-11-09', 150, 'Lebensmittel', 'Einkauf'));   // Monat 450 vs. Schnitt 200
+  ['2026-08-11', '2026-09-11', '2026-10-11'].forEach(d => l.push(b(d, 17, 'Google One (Gemini)', 'Gemini')));   // neues Abo
+  l.push(b('2026-11-06', 33.4, 'Ausgehen & Soziales', 'Ticketmaster'), b('2026-11-06', 33.4, 'Ausgehen & Soziales', 'Ticketmaster'));
+  l.push(b('2026-11-04', 2500, 'Reise Rom Nov 2026', 'Hotel Rom'));             // Reise: nie auffällig
+  const r = L.auffaelligkeiten(l, '2026-11-12'), arten = a => r.filter(x => x.art === a);
+  assert.strictEqual(arten('gross').length, 1); assert.strictEqual(arten('gross')[0].betrag, 900);
+  assert.ok(arten('kategorie').some(x => x.kategorie === 'Lebensmittel'));
+  assert.strictEqual(arten('teurer').length, 1); assert.strictEqual(arten('teurer')[0].jetzt, 44.95);
+  assert.ok(arten('neu').some(x => x.abo.name === 'Gemini'));
+  assert.ok(!arten('neu').some(x => x.abo.name === 'Salt'));
+  assert.strictEqual(arten('doppelt').length, 1);
+  assert.ok(!r.some(x => x.buchung && /Reise/.test(x.buchung.kategorie)));
+  assert.strictEqual(r[0].art, 'doppelt');
+  assert.strictEqual(new Set(r.map(x => x.id)).size, r.length);
+});
+
 test('Monate addieren: Monatsende', () => {
   assert.strictEqual(L.plusMonate('2026-01-31', 1), '2026-02-28');
   assert.strictEqual(L.plusMonate('2026-11-15', 2), '2027-01-15');
