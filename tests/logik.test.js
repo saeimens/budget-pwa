@@ -73,6 +73,25 @@ test('Kreditkarte: Auslandszuschlag zum Einkauf, LSV übersprungen, unverbucht a
   assert.strictEqual(r.hinweise.length, 1);
 });
 
+test('Kreditkarte: Zuschlag über dem Einkauf oder zwischen zwei Einkäufen geht an den rechnerisch passenden', () => {
+  const r = L.auswerten(karte([
+    ['19.04.2026', 'VISA FEE BUCURESTI ROU', '148', 'CHF', '148.00'],
+    ['19.04.2026', 'HOTEL LONDON GBR', '714.15', 'GBP', '786.60'],
+    ['19.04.2026', '1.75% ZUSCHLAG CHF IM AUSLAND', '2.59', 'CHF', '2.59'],
+    ['03.02.2026', '1.75% ZUSCHLAG CHF IM AUSLAND', '2.89', 'CHF', '2.89'],
+    ['03.02.2026', 'BOOKING HOTEL NLD', '164.94', 'CHF', '164.94'],
+    ['03.02.2026', 'FLUG CHE', '268.25', 'CHF', '268.25']]), 'kk.csv', leer);
+  const betrag = t => r.neu.find(b => b.banktext.includes(t)).betrag;
+  assert.strictEqual(r.neu.length, 4);
+  assert.strictEqual(betrag('VISA FEE'), 150.59); assert.strictEqual(betrag('HOTEL LONDON'), 786.6);
+  assert.strictEqual(betrag('BOOKING'), 167.83); assert.strictEqual(betrag('FLUG'), 268.25);
+});
+
+test('Kreditkarte: Zuschlag ohne Einkauf am selben Tag bleibt eigene Buchung', () => {
+  const r = L.auswerten(karte([['25.01.2026', '1.75% ZUSCHLAG CHF IM AUSLAND', '3.42', 'CHF', '3.42'], ['24.01.2026', 'SHOP', '10', 'CHF', '10.00']]), 'kk.csv', leer);
+  assert.strictEqual(r.neu.length, 2);
+});
+
 test('Kreditkarte: zwei identische Käufe am selben Tag bleiben beide (#2)', () => {
   const r = L.auswerten(karte([['05.10.2026', 'TICKET', '21', 'CHF', '21.00'], ['05.10.2026', 'TICKET', '21', 'CHF', '21.00']]), 'kk.csv', leer);
   assert.strictEqual(r.neu.length, 2);

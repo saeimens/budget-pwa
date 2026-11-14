@@ -67,7 +67,7 @@ const Logik = (() => {
     const lines = text.split(/\r?\n/).filter(l => !l.startsWith('sep='));
     const data = parseCsv(lines.join('\n'), ';');
     const h = data[0], ix = n => h.indexOf(n);
-    const rows = [], hinweise = [];
+    const hinweise = [], alle = [];
     data.slice(1).forEach(r => {
       if (r.length < 10 || !r[ix('Einkaufsdatum')]) return;
       const bel = parseNum(r[ix('Belastung')]), gut = parseNum(r[ix('Gutschrift')]);
@@ -77,15 +77,23 @@ const Logik = (() => {
       const betrag = gut ? gut : -bel;
       const d = r[ix('Einkaufsdatum')].split('.');
       const datum = d[2] + '-' + d[1] + '-' + d[0];
-      // 1.75 %-Auslandszuschlag steht als eigene Zeile direkt nach dem Einkauf → zum Einkauf addieren
-      if (/ZUSCHLAG/i.test(txt)) {
-        const prev = rows[rows.length - 1];
-        if (prev && prev.datum === datum) { prev.betrag = r2(prev.betrag + betrag); prev.name += ' (inkl. 1.75 % Zuschlag)'; return; }
-      }
       const orig = r[ix('Originalwährung')] && r[ix('Originalwährung')] !== 'CHF' ? ' (' + r[ix('Betrag')] + ' ' + r[ix('Originalwährung')] + ')' : '';
-      rows.push({ datum, betrag, name: cleanName(txt) + orig, text: txt + orig, konto: 'Kreditkarte',
-        key: 'KK|' + datum + '|' + betrag.toFixed(2) + '|' + txt.slice(0, 40) });
+      alle.push({ i: alle.length, datum, betrag, betrag0: betrag, txt, orig, zuschlag: /ZUSCHLAG/i.test(txt) });
     });
+    // 1.75 %-Auslandszuschlag steht als eigene Zeile beim Einkauf, mal darüber, mal darunter → zum Einkauf vom selben Tag
+    // addieren, zu dem die 1.75 % rechnerisch passen; sonst zur Nachbarzeile vom selben Tag; sonst bleibt er eine eigene Buchung.
+    const kaeufe = alle.filter(x => !x.zuschlag);
+    alle.filter(x => x.zuschlag).forEach(z => {
+      const frei = kaeufe.filter(k => k.datum === z.datum && !k.mitZuschlag);
+      const abw = k => Math.abs(Math.round(Math.abs(k.betrag) * 1.75) / 100 - Math.abs(z.betrag));
+      let ziel = frei.filter(k => abw(k) <= 0.011).sort((a, b) => abw(a) - abw(b) || Math.abs(a.i - z.i) - Math.abs(b.i - z.i))[0];
+      if (!ziel) ziel = frei.find(k => k.i === z.i - 1) || frei.find(k => k.i === z.i + 1);
+      if (ziel) { ziel.betrag = r2(ziel.betrag + z.betrag); ziel.mitZuschlag = true; z.verrechnet = true; }
+    });
+    const rows = alle.filter(x => !x.verrechnet).map(x => ({ datum: x.datum, betrag: x.betrag,
+      name: cleanName(x.txt) + x.orig + (x.mitZuschlag ? ' (inkl. 1.75 % Zuschlag)' : ''), text: x.txt + x.orig, konto: 'Kreditkarte',
+      // Schlüssel mit dem Betrag ohne Zuschlag (wie seit jeher), damit bereits importierte Buchungen erkannt werden
+      key: 'KK|' + x.datum + '|' + x.betrag0.toFixed(2) + '|' + x.txt.slice(0, 40) }));
     // identische Käufe am selben Tag eindeutig machen
     const gesehen = {};
     rows.forEach(r => { gesehen[r.key] = (gesehen[r.key] || 0) + 1; if (gesehen[r.key] > 1) r.key += '#' + gesehen[r.key]; });
