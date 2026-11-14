@@ -213,14 +213,14 @@ test('Wiederkehrend: Zahlung mit neuer Notiz in derselben Kategorie zählt als b
 
 test('Wiederkehrend: zwei Zahlungen im Jahresabstand nur bei Abos; Ausgeblendetes fehlt', () => {
   const b = (datum, kategorie, notiz, betrag, typ = 'Ausgabe') => ({ datum, betrag, kategorie, notiz, typ });
-  const l = [b('2025-04-20', 'Lebensmittel', 'Apfelkuchen', 5), b('2026-04-20', 'Lebensmittel', 'Apfelkuchen', 5),
-    b('2025-12-14', 'Software & KI-Abos', 'Bitwarden', 9), b('2026-12-01', 'Software & KI-Abos', 'Bitwarden', 9),
-    b('2025-09-19', 'Ausgehen & Soziales', 'Gazzetta, Abo', 30), b('2026-09-19', 'Ausgehen & Soziales', 'Gazzetta, Abo', 30),
-    b('2025-03-31', 'Rechtsschutz', 'Protekta', 270, 'Rückstellung'), b('2026-03-31', 'Rechtsschutz', 'Protekta', 270, 'Rückstellung')];
+  const l = [b('2025-04-20', 'Lebensmittel', 'Kuchen', 5), b('2026-04-20', 'Lebensmittel', 'Kuchen', 5),
+    b('2025-12-14', 'Software & KI-Abos', 'Passwortdienst', 9), b('2026-12-01', 'Software & KI-Abos', 'Passwortdienst', 9),
+    b('2025-09-19', 'Ausgehen & Soziales', 'Magazin, Abo', 30), b('2026-09-19', 'Ausgehen & Soziales', 'Magazin, Abo', 30),
+    b('2025-03-31', 'Rechtsschutz', 'Versicherung X', 270, 'Rückstellung'), b('2026-03-31', 'Rechtsschutz', 'Versicherung X', 270, 'Rückstellung')];
   const namen = r => r.map(w => w.name).sort();
-  assert.deepStrictEqual(namen(L.wiederkehrend(l, '2026-12-05')), ['Gazzetta, Abo', 'Protekta']);
-  const opts = { abo: k => k === 'Software & KI-Abos', aus: new Set(['Rückstellung|Rechtsschutz|Protekta']) };
-  assert.deepStrictEqual(namen(L.wiederkehrend(l, '2026-12-05', undefined, opts)), ['Bitwarden', 'Gazzetta, Abo']);
+  assert.deepStrictEqual(namen(L.wiederkehrend(l, '2026-12-05')), ['Magazin, Abo', 'Versicherung X']);
+  const opts = { abo: k => k === 'Software & KI-Abos', aus: new Set(['Rückstellung|Rechtsschutz|Versicherung X']) };
+  assert.deepStrictEqual(namen(L.wiederkehrend(l, '2026-12-05', undefined, opts)), ['Passwortdienst', 'Magazin, Abo']);
 });
 
 test('Monate addieren: Monatsende', () => {
